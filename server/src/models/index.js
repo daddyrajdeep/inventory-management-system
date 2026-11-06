@@ -1,0 +1,11 @@
+// Import every model from one place:  import { Product, Sale } from '../models/index.js';
+export { default as User } from './User.js';
+export { default as Category } from './Category.js';
+export { default as Supplier } from './Supplier.js';
+export { default as Product } from './Product.js';
+export { default as StockMovement } from './StockMovement.js';
+export { default as PurchaseOrder } from './PurchaseOrder.js';
+export { default as Sale } from './Sale.js';
+export { default as Expense } from './Expense.js';
+export { default as AuditLog } from './AuditLog.js';
+export { default as Alert } from './Alert.js';
