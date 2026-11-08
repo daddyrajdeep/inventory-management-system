@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Menu, Search } from 'lucide-react';
+import { Bell, LogOut, Menu, Moon, Search, Sun } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { usePreferences } from '../context/PreferencesContext';
 
 export default function Topbar({ onMenu }) {
   const { user, logout } = useAuth();
+  const { prefs, setPref } = usePreferences();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -27,13 +29,24 @@ export default function Topbar({ onMenu }) {
       </div>
 
       <div className="ml-auto flex items-center gap-4">
+        <button
+          onClick={() => setPref('darkMode', !prefs.darkMode)}
+          aria-label="Toggle dark mode"
+          className="text-gray-600 hover:text-gray-800"
+        >
+          {prefs.darkMode ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+
         {/* TODO (Alerts owner): replace the fake count with real unread alerts */}
         <button className="relative" aria-label="Notifications">
           <Bell size={20} className="text-gray-600" />
-          <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-            3
-          </span>
+          {prefs.notifications && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+              3
+            </span>
+          )}
         </button>
+
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium text-gray-800">{user.name}</p>
           <p className="text-xs capitalize text-gray-500">{user.role}</p>
