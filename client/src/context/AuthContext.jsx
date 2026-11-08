@@ -22,13 +22,24 @@ export function AuthProvider({ children }) {
     setUser(userData);
   };
 
+  // Update part of the logged-in user, e.g. updateUser({ name: 'New name' })
+  const updateUser = (changes) => {
+    setUser((current) => {
+      const next = { ...current, ...changes };
+      localStorage.setItem('user', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const logout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, login, updateUser, logout }}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
