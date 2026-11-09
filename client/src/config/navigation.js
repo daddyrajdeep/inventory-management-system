@@ -16,6 +16,8 @@ export const APP_NAME = 'StockFlow';
 export const navItems = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['admin', 'manager', 'staff'] },
   { label: 'Products', path: '/products', icon: Package, roles: ['admin', 'manager', 'staff'] },
+  { label: 'Categories', path: '/categories', icon: Package, roles: ['admin', 'manager', 'staff'] },
+  { label: 'Suppliers', path: '/suppliers', icon: Users, roles: ['admin', 'manager', 'staff'] },
   { label: 'Inventory', path: '/inventory', icon: Archive, roles: ['admin', 'manager', 'staff'] },
   { label: 'Purchase Orders', path: '/orders', icon: ClipboardList, roles: ['admin', 'manager'] },
   { label: 'Sales', path: '/sales', icon: ShoppingCart, roles: ['admin', 'manager', 'staff'] },
