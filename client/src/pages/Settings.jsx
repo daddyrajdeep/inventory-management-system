@@ -71,10 +71,15 @@ export default function Settings() {
     if (Object.keys(errors).length > 0) return;
 
     setSavingProfile(true);
-    await updateProfile(profile);
-    updateUser({ name: profile.name.trim(), email: profile.email });
-    setSavingProfile(false);
-    toast.success('Profile updated');
+    try {
+      const { user: saved } = await updateProfile(profile);
+      updateUser({ name: saved.name, email: saved.email });
+      toast.success('Profile updated');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const savePassword = async (e) => {
@@ -87,10 +92,15 @@ export default function Settings() {
     if (Object.keys(errors).length > 0) return;
 
     setSavingPw(true);
-    await changePassword(pw);
-    setSavingPw(false);
-    setPw({ current: '', next: '', confirm: '' });
-    toast.success('Password changed');
+    try {
+      await changePassword({ currentPassword: pw.current, newPassword: pw.next });
+      setPw({ current: '', next: '', confirm: '' });
+      toast.success('Password changed');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSavingPw(false);
+    }
   };
 
   return (

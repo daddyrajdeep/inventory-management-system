@@ -11,6 +11,7 @@ import { getUsers, createUser, updateUserRole, setUserActive } from '../services
 
 // OWNER: Leader (admin only)
 // Features: search, role filter, add user, change role, activate / deactivate
+// Connected to the real API (GET/POST /users, PATCH /users/:id/role, PATCH /users/:id/active)
 const roleTone = { admin: 'red', manager: 'blue', staff: 'gray' };
 const emptyForm = { name: '', email: '', role: 'staff', password: '' };
 
@@ -35,11 +36,10 @@ export default function Users() {
 
   useEffect(() => {
     let active = true;
-    getUsers().then((list) => {
-      if (!active) return;
-      setUsers(list);
-      setLoading(false);
-    });
+    getUsers()
+      .then((list) => active && setUsers(list))
+      .catch((err) => toast.error(err.message))
+      .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
@@ -82,16 +82,24 @@ export default function Users() {
   };
 
   const handleRoleChange = async (target, role) => {
-    await updateUserRole(target.id, role);
-    await refresh();
-    toast.success(`${target.name} is now ${role}`);
+    try {
+      await updateUserRole(target.id, role);
+      await refresh();
+      toast.success(`${target.name} is now ${role}`);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const handleToggleActive = async (target) => {
     if (target.isActive && !window.confirm(`Deactivate ${target.name}? They will not be able to log in.`)) return;
-    await setUserActive(target.id, !target.isActive);
-    await refresh();
-    toast.success(`${target.name} was ${target.isActive ? 'deactivated' : 'activated'}`);
+    try {
+      await setUserActive(target.id, !target.isActive);
+      await refresh();
+      toast.success(`${target.name} was ${target.isActive ? 'deactivated' : 'activated'}`);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const columns = [
