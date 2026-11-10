@@ -1,20 +1,25 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search, Plus, Download, CalendarDays, ChevronDown, MoreHorizontal,
   Wallet, Truck, Building2, Megaphone, Package, CheckCircle2,
-  Clock3, AlertCircle, X, Receipt, CircleDollarSign
+  Clock3, AlertCircle, X, Receipt
 } from "lucide-react";
 import "./SalesExpenses.css";
 
 const initialExpenses = [
-  { id: "EXP-208", title: "Office Rent", category: "Utilities", vendor: "City Properties", amount: 1200, date: "Jul 08, 2026", status: "Paid", method: "Bank Transfer" },
-  { id: "EXP-207", title: "Product Delivery", category: "Shipping", vendor: "FastTrack Logistics", amount: 285, date: "Jul 07, 2026", status: "Pending", method: "UPI" },
-  { id: "EXP-206", title: "Social Media Ads", category: "Marketing", vendor: "Meta Ads", amount: 450, date: "Jul 06, 2026", status: "Paid", method: "Card" },
-  { id: "EXP-205", title: "Packaging Materials", category: "Inventory", vendor: "PackWell Supplies", amount: 320, date: "Jul 05, 2026", status: "Paid", method: "Bank Transfer" },
-  { id: "EXP-204", title: "Internet & Phone", category: "Utilities", vendor: "Broadband Co.", amount: 95, date: "Jul 04, 2026", status: "Overdue", method: "—" },
+  { id: "EXP-208", title: "Office Rent", category: "Utilities", vendor: "City Properties", amount: 25000, date: "Jul 08, 2026", status: "Paid", method: "Bank Transfer" },
+  { id: "EXP-207", title: "Product Delivery", category: "Shipping", vendor: "FastTrack Logistics", amount: 2850, date: "Jul 07, 2026", status: "Pending", method: "UPI" },
+  { id: "EXP-206", title: "Social Media Ads", category: "Marketing", vendor: "Meta Ads", amount: 4500, date: "Jul 06, 2026", status: "Paid", method: "Card" },
+  { id: "EXP-205", title: "Packaging Materials", category: "Inventory", vendor: "PackWell Supplies", amount: 3200, date: "Jul 05, 2026", status: "Paid", method: "Bank Transfer" },
+  { id: "EXP-204", title: "Internet & Phone", category: "Utilities", vendor: "Broadband Co.", amount: 1499, date: "Jul 04, 2026", status: "Overdue", method: "—" },
 ];
 
-const money = (n) => `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(n);
 
 function ExpenseStatus({ status }) {
   const Icon = status === "Paid" ? CheckCircle2 : status === "Pending" ? Clock3 : AlertCircle;
@@ -97,7 +102,7 @@ export default function Expenses() {
           <label>Expense title<input required value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} placeholder="e.g. Office supplies"/></label>
           <label>Category<select value={form.category} onChange={(e) => setForm({...form, category: e.target.value})}><option>Utilities</option><option>Shipping</option><option>Marketing</option><option>Inventory</option><option>Other</option></select></label>
           <label>Vendor<input required value={form.vendor} onChange={(e) => setForm({...form, vendor: e.target.value})} placeholder="Vendor / company name"/></label>
-          <label>Amount ($)<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm({...form, amount: e.target.value})} placeholder="0.00"/></label>
+          <label>Amount (₹)<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm({...form, amount: e.target.value})} placeholder="0.00"/></label>
           <label>Payment status<select value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}><option>Paid</option><option>Pending</option><option>Overdue</option></select></label>
           <label>Payment method<select value={form.method} onChange={(e) => setForm({...form, method: e.target.value})}><option>Bank Transfer</option><option>UPI</option><option>Card</option><option>Cash</option><option>—</option></select></label>
           <div className="se-modal-actions"><button type="button" className="se-secondary" onClick={() => setModalOpen(false)}>Cancel</button><button type="submit" className="se-primary"><Plus size={15}/> Save Expense</button></div>

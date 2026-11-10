@@ -5,9 +5,9 @@
 .sf-dashboard {
   width: 100%;
   min-width: 0;
-  padding: 28px 30px 22px;
+  padding: 0;
   color: #202235;
-  background: #f7f8fc;
+  background: transparent;
   box-sizing: border-box;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -67,12 +67,63 @@
 .sf-status.pending { color:#c58a37; background:#fff5e5; }
 .sf-demo-note { margin:14px 2px 0; color:#a0a4b1; font-size:10px; text-align:right; }
 
+/* ---------------------------------------------------------------
+   Dark Mode Overrides
+---------------------------------------------------------------- */
+.dark .sf-dashboard { color: #f1f5f9; background: transparent; }
+.dark .sf-page-heading h1 { color: #f8fafc; }
+.dark .sf-eyebrow { color: #a78bfa; }
+.dark .sf-subtitle { color: #94a3b8; }
+
+.dark .sf-date-button { color: #cbd5e1; background: #1e293b; border-color: #334155; }
+.dark .sf-date-button:hover { background: #273449; }
+.dark .sf-export-button:hover { background: #6042e6; }
+.dark .sf-text-button { color: #a78bfa; }
+.dark .sf-text-button:hover { color: #c4b5fd; }
+.dark .sf-icon-button { color: #94a3b8; }
+.dark .sf-icon-button:hover { color: #f1f5f9; }
+
+.dark .sf-stat-card,
+.dark .sf-panel {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.dark .sf-stat-label { color: #94a3b8; }
+.dark .sf-stat-card h2 { color: #f8fafc; }
+.dark .sf-stat-foot { color: #64748b; }
+.dark .sf-panel-heading h3 { color: #f1f5f9; }
+.dark .sf-panel-heading p { color: #94a3b8; }
+
+.dark .sf-stat-icon.purple { color: #c4b5fd; background: rgba(118, 86, 232, 0.2); }
+.dark .sf-stat-icon.blue { color: #93c5fd; background: rgba(66, 135, 229, 0.2); }
+.dark .sf-stat-icon.orange { color: #fdba74; background: rgba(229, 139, 79, 0.2); }
+.dark .sf-stat-icon.green { color: #6ee7b7; background: rgba(42, 168, 121, 0.2); }
+.dark .sf-trend { color: #6ee7b7; background: rgba(33, 155, 112, 0.2); }
+.dark .sf-trend.negative { color: #fca5a5; background: rgba(223, 134, 83, 0.2); }
+
+.dark .sf-product-row { border-bottom-color: #334155; }
+.dark .sf-product-rank { color: #c4b5fd; background: rgba(136, 116, 214, 0.2); }
+.dark .sf-product-meta strong { color: #f1f5f9; }
+.dark .sf-product-meta span { color: #94a3b8; }
+.dark .sf-progress { background: #334155; }
+.dark .sf-product-revenue { color: #f1f5f9; }
+
+.dark .sf-transactions-table th { color: #94a3b8; border-bottom-color: #334155; }
+.dark .sf-transactions-table td { color: #cbd5e1; border-bottom-color: #334155; }
+.dark .sf-transactions-table td:first-child strong { color: #f1f5f9; }
+.dark .sf-transactions-table td:first-child span { color: #94a3b8; }
+.dark .sf-transactions-table .sf-amount { color: #f8fafc; }
+.dark .sf-status.completed { color: #6ee7b7; background: rgba(33, 150, 110, 0.2); }
+.dark .sf-status.pending { color: #fcd34d; background: rgba(197, 138, 55, 0.2); }
+.dark .sf-demo-note { color: #64748b; }
+
 @media (max-width: 1100px) {
   .sf-stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .sf-charts-grid,.sf-bottom-grid { grid-template-columns:1fr; }
 }
 @media (max-width: 650px) {
-  .sf-dashboard { padding:20px 14px; }
+  .sf-dashboard { padding:0; }
   .sf-page-heading { align-items:flex-start; flex-direction:column; }
   .sf-heading-actions { width:100%; }
   .sf-stats-grid { gap:10px; }

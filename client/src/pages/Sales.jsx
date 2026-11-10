@@ -1,20 +1,25 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search, Plus, Download, CalendarDays, ChevronDown, MoreHorizontal,
-  ReceiptText, CircleDollarSign, ShoppingCart, TrendingUp, X,
-  CheckCircle2, Clock3, AlertCircle, Eye, Printer
+  ReceiptText, IndianRupee, TrendingUp, X,
+  CheckCircle2, Clock3, AlertCircle
 } from "lucide-react";
 import "./SalesExpenses.css";
 
 const initialInvoices = [
-  { id: "INV-1052", customer: "Alicia Tran", email: "alicia.tran@email.com", items: "Wireless Mouse × 2", amount: 240, date: "Jul 08, 2026", payment: "Paid", status: "Completed" },
-  { id: "INV-1051", customer: "Mohamed El-Sayed", email: "mohamed@email.com", items: "USB Keyboard × 3", amount: 375, date: "Jul 08, 2026", payment: "Pending", status: "Pending" },
-  { id: "INV-1050", customer: "Sofia Meyers", email: "sofia@email.com", items: "Headphones × 2", amount: 520, date: "Jul 07, 2026", payment: "Paid", status: "Completed" },
-  { id: "INV-1049", customer: "Carlos Ramirez", email: "carlos@email.com", items: "USB-C Hub × 1", amount: 180, date: "Jul 07, 2026", payment: "Refunded", status: "Cancelled" },
-  { id: "INV-1048", customer: "Nina Patel", email: "nina@email.com", items: "Laptop Stand × 4", amount: 340, date: "Jul 06, 2026", payment: "Paid", status: "Completed" },
+  { id: "INV-1052", customer: "Alicia Tran", email: "alicia.tran@email.com", items: "Wireless Mouse × 2", amount: 1200, date: "Jul 08, 2026", payment: "Paid", status: "Completed" },
+  { id: "INV-1051", customer: "Mohamed El-Sayed", email: "mohamed@email.com", items: "USB Keyboard × 3", amount: 2400, date: "Jul 08, 2026", payment: "Pending", status: "Pending" },
+  { id: "INV-1050", customer: "Sofia Meyers", email: "sofia@email.com", items: "Headphones × 2", amount: 3200, date: "Jul 07, 2026", payment: "Paid", status: "Completed" },
+  { id: "INV-1049", customer: "Carlos Ramirez", email: "carlos@email.com", items: "USB-C Hub × 1", amount: 1500, date: "Jul 07, 2026", payment: "Refunded", status: "Cancelled" },
+  { id: "INV-1048", customer: "Nina Patel", email: "nina@email.com", items: "Laptop Stand × 4", amount: 2800, date: "Jul 06, 2026", payment: "Paid", status: "Completed" },
 ];
 
-const money = (n) => `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(n);
 
 function Status({ status }) {
   const Icon = status === "Completed" || status === "Paid" ? CheckCircle2 : status === "Pending" ? Clock3 : AlertCircle;
@@ -67,7 +72,7 @@ export default function Sales() {
       </div>
 
       <div className="se-stats">
-        <div className="se-stat"><div className="se-stat-icon violet"><CircleDollarSign size={19}/></div><span>Total Sales</span><strong>{money(totalSales)}</strong><small className="positive">↗ 12.8% <em>vs. last month</em></small></div>
+        <div className="se-stat"><div className="se-stat-icon violet"><IndianRupee size={19}/></div><span>Total Sales</span><strong>{money(totalSales)}</strong><small className="positive">↗ 12.8% <em>vs. last month</em></small></div>
         <div className="se-stat"><div className="se-stat-icon green"><CheckCircle2 size={19}/></div><span>Paid Invoices</span><strong>{money(paid)}</strong><small className="positive">↗ 8.4% <em>collected</em></small></div>
         <div className="se-stat"><div className="se-stat-icon orange"><Clock3 size={19}/></div><span>Pending Payments</span><strong>{money(pending)}</strong><small className="neutral">{invoices.filter((x) => x.payment === "Pending").length} invoice(s) awaiting</small></div>
         <div className="se-stat"><div className="se-stat-icon blue"><ReceiptText size={19}/></div><span>Total Invoices</span><strong>{invoices.length.toString().padStart(2, "0")}</strong><small className="positive"><TrendingUp size={12}/> Sales records</small></div>
@@ -103,7 +108,7 @@ export default function Sales() {
           <div className="se-modal-head"><div><h2>Create New Sale</h2><p>Enter sale details to generate an invoice.</p></div><button type="button" className="se-row-action" onClick={() => setModalOpen(false)}><X size={18}/></button></div>
           <label>Customer name<input required value={form.customer} onChange={(e) => setForm({...form, customer: e.target.value})} placeholder="e.g. Alex Johnson"/></label>
           <label>Product / items<input required value={form.item} onChange={(e) => setForm({...form, item: e.target.value})} placeholder="e.g. Wireless Mouse × 2"/></label>
-          <label>Sale amount ($)<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm({...form, amount: e.target.value})} placeholder="0.00"/></label>
+          <label>Sale amount (₹)<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm({...form, amount: e.target.value})} placeholder="0.00"/></label>
           <label>Payment status<select value={form.payment} onChange={(e) => setForm({...form, payment: e.target.value})}><option>Paid</option><option>Pending</option></select></label>
           <div className="se-modal-actions"><button type="button" className="se-secondary" onClick={() => setModalOpen(false)}>Cancel</button><button type="submit" className="se-primary"><Plus size={15}/> Create Sale</button></div>
         </form>
