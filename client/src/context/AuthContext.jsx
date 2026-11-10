@@ -1,8 +1,8 @@
 import { createContext, useContext, useState } from 'react';
 
 // OWNER: Leader
-// This is a MOCK login for the frontend phase.
-// In the backend phase, login() will receive the real user + JWT from the API.
+// Holds the logged-in user. The token and user are kept in localStorage so a page refresh keeps you logged in.
+// services/api.js reads the token from localStorage and sends it with every request.
 
 const AuthContext = createContext(null);
 
@@ -15,9 +15,11 @@ function readStoredUser() {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(readStoredUser);
+  const [user, setUser] = useState(() => (localStorage.getItem('token') ? readStoredUser() : null));
 
-  const login = (userData) => {
+  // Called after a successful POST /auth/login
+  const login = (userData, token) => {
+    localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
   };
