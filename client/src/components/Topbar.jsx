@@ -15,7 +15,7 @@ export default function Topbar({ onMenu }) {
 
   return (
     <header className="flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 md:px-6">
-      <button className="md:hidden" onClick={onMenu} aria-label="Open menu">
+      <button className="text-gray-600 hover:text-gray-800 md:hidden" onClick={onMenu} aria-label="Open menu">
         <Menu size={22} />
       </button>
 
@@ -24,7 +24,7 @@ export default function Topbar({ onMenu }) {
         <input
           type="text"
           placeholder="Search..."
-          className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"
+          className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-indigo-400"
         />
       </div>
 

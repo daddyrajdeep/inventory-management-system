@@ -1,4 +1,3 @@
-import React from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -22,6 +21,7 @@ import {
   CalendarDays,
   MoreHorizontal,
 } from "lucide-react";
+import { usePreferences } from "../context/PreferencesContext";
 import "./Dashboard.css";
 
 const monthlyData = [
@@ -77,8 +77,19 @@ const StatCard = ({ title, value, note, icon: Icon, tone, trend }) => (
 );
 
 const Dashboard = () => {
+  const { prefs } = usePreferences();
+  const isDark = Boolean(prefs?.darkMode);
+
+  const tooltipStyle = {
+    backgroundColor: isDark ? "#1e293b" : "#ffffff",
+    borderColor: isDark ? "#334155" : "#e2e8f0",
+    color: isDark ? "#f1f5f9" : "#1e293b",
+    borderRadius: "8px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+  };
+
   return (
-    <main className="sf-dashboard">
+    <div className="sf-dashboard">
       <div className="sf-page-heading">
         <div>
           <p className="sf-eyebrow">OVERVIEW</p>
@@ -109,11 +120,24 @@ const Dashboard = () => {
           <div className="sf-chart">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#edf0f5" strokeDasharray="4 4" vertical={false} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#9299a8", fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `${v / 1000}k`} axisLine={false} tickLine={false} tick={{ fill: "#9299a8", fontSize: 12 }} width={42} />
-                <Tooltip formatter={(v) => money(v)} />
-                <Line type="monotone" dataKey="sales" name="Sales" stroke="#7656e8" strokeWidth={3} dot={{ r: 4, fill: "#7656e8", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
+                <CartesianGrid stroke={isDark ? "#334155" : "#edf0f5"} strokeDasharray="4 4" vertical={false} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} />
+                <YAxis tickFormatter={(v) => `₹${v / 1000}k`} axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} width={48} />
+                <Tooltip
+                  formatter={(v) => money(v)}
+                  contentStyle={tooltipStyle}
+                  itemStyle={{ color: isDark ? "#f1f5f9" : "#1e293b" }}
+                  labelStyle={{ color: isDark ? "#94a3b8" : "#64748b" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="sales"
+                  name="Sales"
+                  stroke="#7656e8"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: "#7656e8", strokeWidth: 2, stroke: isDark ? "#1e293b" : "#fff" }}
+                  activeDot={{ r: 6 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -127,11 +151,16 @@ const Dashboard = () => {
           <div className="sf-chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData} margin={{ top: 12, right: 8, left: 0, bottom: 0 }} barGap={7}>
-                <CartesianGrid stroke="#edf0f5" strokeDasharray="4 4" vertical={false} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#9299a8", fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `${v / 1000}k`} axisLine={false} tickLine={false} tick={{ fill: "#9299a8", fontSize: 12 }} width={42} />
-                <Tooltip formatter={(v) => money(v)} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <CartesianGrid stroke={isDark ? "#334155" : "#edf0f5"} strokeDasharray="4 4" vertical={false} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} />
+                <YAxis tickFormatter={(v) => `₹${v / 1000}k`} axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} width={48} />
+                <Tooltip
+                  formatter={(v) => money(v)}
+                  contentStyle={tooltipStyle}
+                  itemStyle={{ color: isDark ? "#f1f5f9" : "#1e293b" }}
+                  labelStyle={{ color: isDark ? "#94a3b8" : "#64748b" }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 8, color: isDark ? "#cbd5e1" : "#64748b" }} />
                 <Bar dataKey="purchase" name="Purchase" fill="#5795ed" radius={[5, 5, 0, 0]} />
                 <Bar dataKey="expense" name="Expense" fill="#f29a65" radius={[5, 5, 0, 0]} />
               </BarChart>
@@ -183,7 +212,7 @@ const Dashboard = () => {
         </article>
       </section>
       <p className="sf-demo-note">Demo data is shown for UI preview. Connect your backend/API to display live inventory and transaction data.</p>
-    </main>
+    </div>
   );
 };
 

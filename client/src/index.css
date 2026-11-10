@@ -31,6 +31,17 @@
 .dark .text-gray-400 { color: #64748b; }
 .dark .hover\:text-gray-800:hover { color: #f1f5f9; }
 
+/* inputs and forms */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+.dark select,
+.dark textarea {
+  color: #f1f5f9;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b;
+}
+
 /* accent */
 .dark .bg-indigo-50 { background-color: #312e81; }
 .dark .text-indigo-700 { color: #c7d2fe; }

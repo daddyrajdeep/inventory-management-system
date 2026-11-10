@@ -17,7 +17,7 @@ export default function Sidebar({ open, onClose }) {
       >
         <div className="flex h-16 items-center justify-between border-b border-gray-200 px-5">
           <span className="text-lg font-bold text-indigo-600">{APP_NAME}</span>
-          <button className="md:hidden" onClick={onClose} aria-label="Close menu">
+          <button className="text-gray-600 hover:text-gray-800 md:hidden" onClick={onClose} aria-label="Close menu">
             <X size={20} />
           </button>
         </div>
