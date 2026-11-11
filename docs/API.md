@@ -25,16 +25,18 @@ Roles: `admin`, `manager`, `staff`.
 Status codes: 200 ok, 201 created, 400 bad input, 401 not logged in or bad token,
 403 not allowed for your role, 404 not found, 409 already exists, 429 too many login attempts.
 
-## Status: planned (fill in when each module is built)
+## Status: planned (the owner fills in the row when the module is built)
 
-| Module | Routes | Who can use |
-|---|---|---|
-| Categories | `GET/POST /categories`, `PUT/DELETE /categories/:id` | read: all, write: admin, manager |
-| Suppliers | `GET/POST /suppliers`, `PUT/DELETE /suppliers/:id` | read: all, write: admin, manager |
-| Products | `GET/POST /products`, `GET/PUT/DELETE /products/:id` | read: all, write: admin, manager |
-| Stock | `POST /stock/in`, `POST /stock/out`, `POST /stock/adjust`, `GET /stock/movements` | all roles |
-| Purchase orders | `GET/POST /purchase-orders`, `PATCH /purchase-orders/:id/receive` | admin, manager |
-| Sales | `GET/POST /sales`, `GET /sales/:id` | all roles |
-| Expenses | `GET/POST /expenses`, `DELETE /expenses/:id` | admin, manager |
-| Reports | `GET /reports/summary`, `/reports/top-products`, `/reports/sales-by-day` | admin, manager |
-| Alerts | `GET /alerts`, `PATCH /alerts/:id/read` | all roles |
+| Module | Owner | Routes | Who can use |
+|---|---|---|---|
+| Categories | Soham | `GET/POST /categories`, `PUT/DELETE /categories/:id` | read: all, write: admin, manager |
+| Suppliers | Soham | `GET/POST /suppliers`, `PUT/DELETE /suppliers/:id` | read: all, write: admin, manager |
+| Products | Rudra | `GET/POST /products`, `GET/PUT/DELETE /products/:id` | read: all, write: admin, manager |
+| Purchase orders | Shilpa | `GET/POST /purchase-orders`, `GET /purchase-orders/:id`, `PATCH /purchase-orders/:id/cancel`, `PATCH /purchase-orders/:id/receive` | admin, manager |
+| Stock | Brijesh | `POST /stock/in`, `POST /stock/out`, `POST /stock/adjust`, `GET /stock/movements` | all roles |
+| Sales | Asmita | `GET/POST /sales`, `GET /sales/:id` | all roles |
+| Expenses | Asmita | `GET/POST /expenses`, `DELETE /expenses/:id` | admin, manager |
+| Reports | Chandra | `GET /reports/summary`, `/reports/top-products`, `/reports/sales-by-day`, `/reports/expense-by-category` | admin, manager |
+| Alerts | Leader | `GET /alerts`, `PATCH /alerts/:id/read` | all roles |
+
+Every response uses `id` (not `_id`). Lists are returned as plain arrays.

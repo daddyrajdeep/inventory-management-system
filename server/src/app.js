@@ -1,3 +1,4 @@
+import './config/mongooseSetup.js'; // must stay first: it configures how models turn into JSON
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
