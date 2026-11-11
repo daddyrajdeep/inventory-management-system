@@ -1,6 +1,6 @@
 // EXAMPLE controller. Copy to server/src/controllers/ and rename for your own module.
 // A controller does the real work for one route: read the request, use the model, send the response.
-import { Category } from '../models/index.js';
+import { Category, Product } from '../models/index.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
@@ -29,9 +29,9 @@ export const updateCategory = asyncHandler(async (req, res) => {
   res.json(category);
 });
 
-// DELETE /api/categories/:id
-// TODO (your task): refuse to delete a category that products still use
 export const deleteCategory = asyncHandler(async (req, res) => {
+  const inUse = await Product.exists({ category: req.params.id });
+if (inUse) throw new ApiError(409, 'Category is in use by products');
   const category = await Category.findByIdAndDelete(req.params.id);
   if (!category) throw new ApiError(404, 'Category not found');
   res.json({ message: 'Category deleted' });
