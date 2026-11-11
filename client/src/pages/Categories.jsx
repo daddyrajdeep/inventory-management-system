@@ -3,54 +3,79 @@ import { Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import DataTable from '../components/DataTable';
-import { getCategories } from '../services/categoryService';
+import {
+  getCategories,
+  createCategory,
+  deleteCategory as removeCategory,
+} from '../services/categoryService';
 
-// OWNER: Soham (Categories and Suppliers)
-// Add and delete only change local state for now, so they reset on refresh.
-// Backend phase: add addCategory / deleteCategory to your own categoryService.js and call them here.
+
 export default function Categories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [error, setError] = useState('');
+const refresh = async () => {
+  try {
+    const list = await getCategories();
+    setCategories(list);
+  } catch (err) {
+    toast.error(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
-  useEffect(() => {
-    let active = true;
-    getCategories().then((list) => {
+useEffect(() => {
+  let active = true;
+  getCategories()
+    .then((list) => {
       if (!active) return;
       setCategories(list);
-      setLoading(false);
+    })
+    .catch((err) => toast.error(err.message))
+    .finally(() => {
+      if (active) setLoading(false);
     });
-    return () => {
-      active = false;
-    };
-  }, []);
+  return () => {
+    active = false;
+  };
+}, []);
 
-  const addCategory = (e) => {
-    e.preventDefault();
-    const name = newCategory.trim();
+  const addCategory = async (e) => {
+  e.preventDefault();
+  const name = newCategory.trim();
 
-    if (!name) {
-      setError('Category name is required');
-      return;
-    }
-    if (categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
-      setError('This category already exists');
-      return;
-    }
+  if (!name) {
+    setError('Category name is required');
+    return;
+  }
+  if (categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+    setError('This category already exists');
+    return;
+  }
 
-    setCategories([...categories, { id: Date.now().toString(), name }]);
+  try {
+    await createCategory({ name });
+    await refresh();
     setNewCategory('');
     setError('');
     toast.success(`"${name}" added`);
-  };
-
-  const deleteCategory = (category) => {
-    if (!window.confirm(`Delete "${category.name}"?`)) return;
-    setCategories(categories.filter((c) => c.id !== category.id));
+  } catch (err) {
+    toast.error(err.message);
+  }
+};
+ const deleteCategory = async (category) => {
+  if (!window.confirm(`Delete "${category.name}"?`)) return;
+  try {
+    await removeCategory(category.id);
+    await refresh();
     toast.success(`"${category.name}" deleted`);
-  };
+  } catch (err) {
+    toast.error(err.message);
+  }
+};
 
   const filteredCategories = useMemo(() => {
     const q = search.toLowerCase();

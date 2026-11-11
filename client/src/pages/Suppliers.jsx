@@ -5,11 +5,13 @@ import PageHeader from '../components/PageHeader';
 import DataTable from '../components/DataTable';
 import Modal from '../components/Modal';
 import FormField, { inputClass } from '../components/FormField';
-import { getSuppliers } from '../services/supplierService';
+import {
+  getSuppliers,
+  createSupplier,
+  deleteSupplier as removeSupplier,
+} from '../services/supplierService';
 
 // OWNER: Soham (Categories and Suppliers)
-// Add and delete only change local state for now, so they reset on refresh.
-// Backend phase: add addSupplier / deleteSupplier to your own supplierService.js and call them here.
 const emptyForm = { name: '', email: '', phone: '', address: '' };
 
 function validate(form) {
@@ -28,13 +30,28 @@ export default function Suppliers() {
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
 
+  const refresh = async () => {
+    try {
+      const list = await getSuppliers();
+      setSuppliers(list);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
-    getSuppliers().then((list) => {
-      if (!active) return;
-      setSuppliers(list);
-      setLoading(false);
-    });
+    getSuppliers()
+      .then((list) => {
+        if (!active) return;
+        setSuppliers(list);
+      })
+      .catch((err) => toast.error(err.message))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -48,28 +65,38 @@ export default function Suppliers() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const addSupplier = (e) => {
+  const addSupplier = async (e) => {
     e.preventDefault();
     const found = validate(form);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
     const supplier = {
-      id: Date.now().toString(),
       name: form.name.trim(),
       email: form.email.trim(),
       phone: form.phone.trim(),
       address: form.address.trim(),
     };
-    setSuppliers([...suppliers, supplier]);
-    setModalOpen(false);
-    toast.success(`${supplier.name} added`);
+
+    try {
+      await createSupplier(supplier);
+      await refresh();
+      setModalOpen(false);
+      toast.success(`${supplier.name} added`);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
-  const deleteSupplier = (supplier) => {
+  const deleteSupplier = async (supplier) => {
     if (!window.confirm(`Delete ${supplier.name}?`)) return;
-    setSuppliers(suppliers.filter((s) => s.id !== supplier.id));
-    toast.success(`${supplier.name} deleted`);
+    try {
+      await removeSupplier(supplier.id);
+      await refresh();
+      toast.success(`${supplier.name} deleted`);
+    } catch (err) {
+      toast.error(err.message);
+    }
   };
 
   const filteredSuppliers = useMemo(() => {
@@ -126,7 +153,7 @@ export default function Suppliers() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name, email or phone..."
-          className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"
+          className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-500"
         />
       </div>
 
