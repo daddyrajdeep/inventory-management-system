@@ -77,5 +77,3 @@ npm run check:stock
 ```
 Creates one temporary product, tries the important cases (including 12 people taking stock at the same time
 and a rollback), prints PASS or FAIL, then deletes everything it created.
-Add this line to `scripts` in `server/package.json` first:
-`"check:stock": "node src/scripts/checkStock.js"`

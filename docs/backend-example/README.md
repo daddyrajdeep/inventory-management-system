@@ -1,6 +1,8 @@
 # Backend example: Categories
 
-A complete, tested backend module to copy from. Use it as the pattern for your own module.
+A starting-point example with exercises (marked `TODO (your task)`). The real
+`server/src/controllers/categoryController.js` has since surpassed it — copy from the real
+controller when you need the finished pattern (duplicate-name checks, delete-while-in-use guard).
 
 1. `categoryController.js` -> copy to `server/src/controllers/`
 2. `categoryRoutes.js`     -> copy to `server/src/routes/`

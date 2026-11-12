@@ -1,4 +1,6 @@
 // EXAMPLE for receiving a purchase order (Shilpa). Marking it received and adding the stock happen together.
+// IMPORTANT: the status flip is ONE atomic conditional update. A read-then-save would let two
+// concurrent receives both pass the check and add the stock twice (see the real controller).
 import { PurchaseOrder } from '../models/index.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -7,11 +9,12 @@ import { runInTransaction, changeStockMany } from '../services/stockService.js';
 // PATCH /api/purchase-orders/:id/receive
 export const receiveOrder = asyncHandler(async (req, res) => {
   const order = await runInTransaction(async (session) => {
-    const po = await PurchaseOrder.findById(req.params.id).session(session);
-    if (!po) throw new ApiError(404, 'Purchase order not found');
-    if (po.status !== 'ordered') {
-      throw new ApiError(400, `Only ordered purchase orders can be received (this one is ${po.status})`);
-    }
+    const po = await PurchaseOrder.findOneAndUpdate(
+      { _id: req.params.id, status: 'ordered' },
+      { status: 'received', receivedDate: new Date() },
+      { session, returnDocument: 'after' }
+    );
+    if (!po) throw new ApiError(400, 'Only an ordered purchase order can be received');
 
     await changeStockMany({
       items: po.items.map((i) => ({ productId: i.product, quantity: i.quantity })),
@@ -22,9 +25,6 @@ export const receiveOrder = asyncHandler(async (req, res) => {
       session,
     });
 
-    po.status = 'received';
-    po.receivedDate = new Date();
-    await po.save({ session });
     return po;
   });
 

@@ -1,0 +1,13 @@
+{
+  "name": "telo3-ai",
+  "version": "6.2.0",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "telo3": "./cli.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
