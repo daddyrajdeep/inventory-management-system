@@ -45,3 +45,8 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 **Checks:** eslint exit 0; browser: created+placed PO-2026-0005 via the create drawer (₹60, Desk Lamp ×3); Receive confirm → "Order received — stock updated" + real-time socket alert; detail drawer shows the RECEIVED stamp + lifecycle stepper + ledger line items. Screenshot captured.
 **Fix:** row-action buttons no longer bubble to the row click (was opening the detail drawer over the confirm dialog).
 **Note:** test order PO-2026-0005 (received) left in demo data; cleaned in P9.
+
+## P5 — Products
+**Files:** `pages/Products.jsx` (kit rebuild).
+**Checks:** eslint exit 0; Gate 5 `vite build` success; browser: 8-row table with correct columns; product drawer shows facts grid + real mini-history (IN/OUT movements) + View full history; delete of Desk Lamp (has history) shows server 409 verbatim + working "Deactivate instead" (cancelled to preserve demo data). Screenshot captured.
+**NOT-RUN:** none.
