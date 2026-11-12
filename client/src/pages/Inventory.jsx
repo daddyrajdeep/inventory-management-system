@@ -182,7 +182,11 @@ export default function Inventory() {
   const stockColumns = [
     { key: "sku", label: "SKU" },
     { key: "name", label: "Product" },
-    { key: "category", label: "Category" },
+    {
+      key: "category",
+      label: "Category",
+      render: (r) => r.category?.name ?? r.category ?? "-", // works whether the API sends a name or a populated category
+    },
     { key: "price", label: "Price", render: (r) => formatCurrency(r.price) },
     { key: "quantity", label: "In stock" },
     { key: "reorderLevel", label: "Reorder level" },
