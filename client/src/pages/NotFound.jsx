@@ -1,62 +1,15 @@
-
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Boxes,
-  Home,
-  ArrowLeft,
-  SearchX,
-  Sun,
-  Moon,
-  Monitor,
-} from "lucide-react";
-
-const getSavedTheme = () => {
-  try {
-    const saved = localStorage.getItem("stockflow-theme");
-    return ["light", "dark", "system"].includes(saved)
-      ? saved
-      : "system";
-  } catch {
-    return "system";
-  }
-};
+import { Boxes, Home, ArrowLeft, SearchX, Sun, Moon } from "lucide-react";
+import { usePreferences } from "../context/PreferencesContext";
 
 export default function NotFound() {
   const navigate = useNavigate();
-
-  const [theme, setTheme] = useState(getSavedTheme);
-  const [systemDark, setSystemDark] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia(
-      "(prefers-color-scheme: dark)"
-    );
-
-    const update = () => setSystemDark(media.matches);
-
-    update();
-    media.addEventListener("change", update);
-
-    return () => media.removeEventListener("change", update);
-  }, []);
-
-  const isDark =
-    theme === "system" ? systemDark : theme === "dark";
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDark);
-  }, [isDark]);
-
-  const changeTheme = (value) => {
-    setTheme(value);
-    localStorage.setItem("stockflow-theme", value);
-  };
+  const { prefs, setPref } = usePreferences();
+  const isDark = prefs.darkMode;
 
   const themes = [
-    [Sun, "Light", "light"],
-    [Moon, "Dark", "dark"],
-    [Monitor, "System", "system"],
+    [Sun, "Light", false],
+    [Moon, "Dark", true],
   ];
 
   return (
@@ -82,13 +35,13 @@ export default function NotFound() {
       >
         {themes.map(([Icon, label, value]) => (
           <button
-            key={value}
+            key={label}
             type="button"
-            onClick={() => changeTheme(value)}
+            onClick={() => setPref("darkMode", value)}
             title={`${label} mode`}
-            aria-pressed={theme === value}
+            aria-pressed={isDark === value}
             className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${
-              theme === value
+              isDark === value
                 ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg"
                 : isDark
                   ? "text-slate-300 hover:bg-white/10"
@@ -112,7 +65,7 @@ export default function NotFound() {
 
           <div className="text-left">
             <h1 className="text-2xl font-black tracking-tight">
-              StockFlow<sup className="text-xs">™</sup>
+              StockFlow
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Inventory Management

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* dark: utilities follow the .dark class (the Settings toggle), not the OS setting */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ---------------------------------------------------------------
    Dark mode
    Turned on by adding the "dark" class to <html> (see PreferencesContext).

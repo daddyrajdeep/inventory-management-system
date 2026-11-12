@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Menu, Moon, Search, Sun } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -8,10 +9,17 @@ export default function Topbar({ onMenu }) {
   const { user, logout } = useAuth();
   const { prefs, setPref } = usePreferences();
   const navigate = useNavigate();
+  const [search, setSearch] = useState('');
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    const q = search.trim();
+    navigate(q ? `/products?search=${encodeURIComponent(q)}` : '/products');
   };
 
   return (
@@ -20,14 +28,17 @@ export default function Topbar({ onMenu }) {
         <Menu size={22} />
       </button>
 
-      <div className="relative max-w-md flex-1">
+      <form role="search" onSubmit={handleSearch} className="relative max-w-md flex-1">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
-          type="text"
-          placeholder="Search..."
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search products by name or SKU..."
+          aria-label="Search products"
           className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"
         />
-      </div>
+      </form>
 
       <div className="ml-auto flex items-center gap-4">
         <button
