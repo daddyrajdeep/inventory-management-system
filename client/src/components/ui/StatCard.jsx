@@ -1,7 +1,9 @@
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 
 // No default delta: a trend renders ONLY when real comparison data is passed.
-export default function StatCard({ label, value, delta, spark, footnote }) {
+// goodWhenDown flips the color semantics (e.g. expenses: a rise is bad) without changing the arrow.
+export default function StatCard({ label, value, delta, spark, footnote, goodWhenDown = false }) {
+  const isGood = delta ? (goodWhenDown ? delta.direction === 'down' : delta.direction === 'up') : false;
   return (
     <div className="rounded-md border border-line bg-surface p-4">
       <p className="text-xs font-medium text-ink-soft">{label}</p>
@@ -10,11 +12,7 @@ export default function StatCard({ label, value, delta, spark, footnote }) {
         {Array.isArray(spark) && spark.length > 1 && <Spark data={spark} />}
       </div>
       {delta ? (
-        <p
-          className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${
-            delta.direction === 'down' ? 'text-out' : 'text-ok'
-          }`}
-        >
+        <p className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${isGood ? 'text-ok' : 'text-out'}`}>
           {delta.direction === 'down' ? <ArrowDownRight size={13} /> : <ArrowUpRight size={13} />}
           {Math.abs(delta.value)}% vs previous period
         </p>

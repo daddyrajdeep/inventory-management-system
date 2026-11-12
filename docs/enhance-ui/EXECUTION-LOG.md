@@ -70,3 +70,7 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 **Files:** AlertBell.jsx + AlertCenter.jsx + alertConfig.js (kit, keep socket), App.jsx (lazy routes), NotFound.jsx (calm 404), Users.jsx (summary plural).
 **Checks:** canary grep zero; no bespoke page CSS/dead files; alert popover + center verified; dark mode verified; test sale/PO removed + stock reversed. QA-RESULTS.md written.
 **NOT-RUN:** server npm test (no TEST_MONGO_URI); DevTools reduced-motion/offline/coarse-pointer emulation; full 390px sweep.
+
+## Polish round
+**Files:** ui/StatCard.jsx (goodWhenDown), Dashboard.jsx (expense delta), ui/Card.jsx (min-w-0), ui/IconButton.jsx + index.css (coarse-pointer 40px targets), QA-RESULTS.md.
+**Checks:** eslint exit 0; vite build success; browser: expense delta now red for a rise (#A33A2A); all 10 routes fit a 544px viewport (no page overflow; tables scroll internally); reduced-motion media query confirmed present.

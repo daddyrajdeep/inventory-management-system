@@ -46,7 +46,10 @@
 
 ## Remaining / open
 - Server test suite unrun (needs a `*test*` Atlas DB).
-- Expense KPI delta color follows numeric direction (rise=green); spec preferred rise=red. Cosmetic; data is real.
-- Coarse-pointer ≥40px target audit and DevTools reduced-motion/offline emulation: NOT-RUN (logic present).
+- Coarse-pointer ≥40px targets: implemented (`@media (pointer: coarse)` on `.icon-btn`); measured emulation NOT-RUN.
+- DevTools reduced-motion/offline emulation: NOT-RUN (global media query confirmed present in the stylesheet).
 - Demo-data drift: a manual +5 Desk Lamp stock-in from verification remains; test sale/PO removed and their stock reversed. Re-seed for a pristine demo.
-- 390px mobile layout verified only at the test viewport (~640px); full 390px sweep NOT-RUN.
+
+## Polish round (resolved)
+- Expense KPI delta now colors a rise red (`goodWhenDown` on StatCard); verified computed color #A33A2A for +153.4%.
+- Mobile horizontal overflow fixed: `min-w-0` on Card lets grid cells shrink; all 10 routes fit a 544px viewport (tables scroll internally via overflow-x-auto). Verified scrollWidth ≤ innerWidth on every route.

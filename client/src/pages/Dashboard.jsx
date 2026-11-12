@@ -105,7 +105,7 @@ export default function Dashboard() {
                 summary ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <StatCard label="Sales" value={formatINR(summary.sales.total)} delta={delta(summary.sales.change)} spark={trendData.map((d) => d.sales)} footnote="no prior period" />
-                    <StatCard label="Expenses" value={formatINR(summary.expenses.total)} delta={delta(summary.expenses.change)} footnote="no prior period" />
+                    <StatCard label="Expenses" value={formatINR(summary.expenses.total)} delta={delta(summary.expenses.change)} goodWhenDown footnote="no prior period" />
                     <StatCard label="Net profit" value={formatINR(summary.netProfit.total)} delta={delta(summary.netProfit.change)} footnote="no prior period" />
                   </div>
                 ) : <Card><PanelError label="Couldn’t load the sales summary." onRetry={retry} /></Card>
