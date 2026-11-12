@@ -37,12 +37,16 @@ export default function Sidebar({ open, onClose }) {
   }, [open, onClose]);
 
   const items = navItems.filter((i) => i.roles.includes(user.role));
-  const width = collapsed ? 'md:w-16' : 'md:w-60';
+  // The icons-only rail applies ONLY at xl (≥1280px), where the collapse/expand controls live.
+  // Below xl the sidebar always shows full labels, so narrowing the window never strands it.
+  const hide = collapsed ? 'xl:hidden' : '';
+  const center = collapsed ? 'xl:justify-center xl:px-0' : '';
+  const width = collapsed ? 'md:w-60 xl:w-16' : 'md:w-60';
 
   const linkClass = ({ isActive }) =>
     `group flex items-center gap-3 rounded-sm px-3 py-2 text-sm font-medium transition-colors duration-[120ms] ${
       isActive ? 'bg-paper text-ink shadow-[inset_2px_0_0_0_var(--ink)]' : 'text-ink-soft hover:bg-paper hover:text-ink'
-    } ${collapsed ? 'md:justify-center md:px-0' : ''}`;
+    } ${center}`;
 
   return (
     <>
@@ -52,11 +56,11 @@ export default function Sidebar({ open, onClose }) {
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className={`flex h-14 items-center gap-2.5 border-b border-line px-4 ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
+        <div className={`flex h-14 items-center gap-2.5 border-b border-line px-4 ${center}`}>
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-ink text-on-ink">
             <Boxes size={16} />
           </span>
-          {!collapsed && <span className="text-base font-semibold text-ink">{APP_NAME}</span>}
+          <span className={`text-base font-semibold text-ink ${hide}`}>{APP_NAME}</span>
           <button className="ml-auto text-ink-soft hover:text-ink md:hidden" onClick={onClose} aria-label="Close menu">
             <X size={18} />
           </button>
@@ -73,12 +77,12 @@ export default function Sidebar({ open, onClose }) {
             if (!groupItems.length) return null;
             return (
               <div key={group} className="mb-4">
-                {!collapsed && <p className="mb-1 px-3 text-xs font-medium text-ink-soft">{group}</p>}
+                <p className={`mb-1 px-3 text-xs font-medium text-ink-soft ${hide}`}>{group}</p>
                 <div className="space-y-0.5">
                   {groupItems.map(({ label, path, icon: Icon }) => (
                     <NavLink key={path} to={path} end={path === '/'} onClick={onClose} className={linkClass} title={collapsed ? label : undefined}>
                       <Icon size={18} className="shrink-0" />
-                      {!collapsed && <span>{label}</span>}
+                      <span className={hide}>{label}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -95,7 +99,7 @@ export default function Sidebar({ open, onClose }) {
           )}
           <NavLink to={settingsItem.path} onClick={onClose} className={linkClass} title={collapsed ? 'Settings' : undefined}>
             <settingsItem.icon size={18} className="shrink-0" />
-            {!collapsed && <span>Settings</span>}
+            <span className={hide}>Settings</span>
           </NavLink>
           <div className="relative mt-1">
             <button
@@ -103,19 +107,15 @@ export default function Sidebar({ open, onClose }) {
               onClick={() => setMenuOpen((v) => !v)}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
-              className={`flex w-full items-center gap-2.5 rounded-sm px-2 py-2 text-left transition-colors hover:bg-paper ${
-                collapsed ? 'md:justify-center md:px-0' : ''
-              }`}
+              className={`flex w-full items-center gap-2.5 rounded-sm px-2 py-2 text-left transition-colors hover:bg-paper ${center}`}
             >
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-paper text-xs font-semibold text-ink">
                 {initials(user.name)}
               </span>
-              {!collapsed && (
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-semibold text-ink">{user.name}</span>
-                  <span className="block text-xs text-ink-soft">{user.role[0].toUpperCase() + user.role.slice(1)}</span>
-                </span>
-              )}
+              <span className={`min-w-0 ${hide}`}>
+                <span className="block truncate text-[13px] font-semibold text-ink">{user.name}</span>
+                <span className="block text-xs text-ink-soft">{user.role[0].toUpperCase() + user.role.slice(1)}</span>
+              </span>
             </button>
             {menuOpen && <UserMenu onClose={() => setMenuOpen(false)} align="left" />}
           </div>
