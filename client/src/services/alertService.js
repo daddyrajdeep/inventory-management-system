@@ -8,7 +8,7 @@ export async function getAlerts({ unread = false, limit = 20 } = {}) {
   return data;
 }
 
-// { count } : a cheap call the bell makes every 30 seconds
+// { count } : the bell asks this on load and after each socket (re)connect
 export async function getUnreadCount() {
   const { data } = await api.get('/alerts/unread-count');
   return data;

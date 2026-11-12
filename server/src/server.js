@@ -3,8 +3,10 @@ import dns from "node:dns";
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 import 'dotenv/config'; // must stay the first import: it loads .env
+import http from 'node:http';
 import app from './app.js';
 import connectDB from './config/db.js';
+import { initSocket } from './socket.js';
 
 const missing = ['MONGO_URI', 'JWT_SECRET'].filter((key) => !process.env[key]);
 if (missing.length > 0) {
@@ -16,7 +18,9 @@ const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(() => {
-    app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+    const server = http.createServer(app);
+    initSocket(server);
+    server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
   })
   .catch((err) => {
     console.error('Could not connect to MongoDB:', err.message);

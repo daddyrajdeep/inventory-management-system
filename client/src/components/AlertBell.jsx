@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Badge from './Badge';
+import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { getAlerts, getUnreadCount, markAlertRead, markAllAlertsRead } from '../services/alertService';
+import { connectSocket } from '../services/socket';
 
 // OWNER: Leader
-// The bell in the top bar. It checks the unread count every 30 seconds, and loads the list when you open it.
-const POLL_MS = 30000;
+// The bell in the top bar. New and read alerts arrive live over a socket; the list loads when you open it.
+const LIST_LIMIT = 15;
 const TYPE_INFO = {
   LOW_STOCK: { label: 'Low stock', tone: 'amber' },
   OUT_OF_STOCK: { label: 'Out of stock', tone: 'red' },
@@ -26,6 +28,7 @@ function timeAgo(value) {
 }
 
 export default function AlertBell() {
+  const { user } = useAuth();
   const { prefs } = usePreferences();
   const navigate = useNavigate();
   const wrapRef = useRef(null);
@@ -44,21 +47,32 @@ export default function AlertBell() {
     }
   }, []);
 
-  // Keep the number fresh (only when the user wants notifications)
+  // Live updates (only when the user wants notifications). The count is refetched on every
+  // (re)connect, so anything missed while offline is caught up.
+  const userId = user?.id;
   useEffect(() => {
-    if (!prefs.notifications) return undefined;
-    let active = true;
-    const poll = () =>
-      getUnreadCount()
-        .then(({ count }) => active && setUnread(count))
-        .catch(() => {}); // the bell must never break the page
-    poll();
-    const timer = setInterval(poll, POLL_MS);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [prefs.notifications]);
+    if (!prefs.notifications || !userId) return undefined;
+    const socket = connectSocket();
+
+    socket.on('connect', refreshCount);
+    // The server drops sockets on password change; retry once with the current token (refused if it's stale)
+    socket.on('disconnect', (reason) => reason === 'io server disconnect' && socket.connect());
+    socket.on('alert:new', ({ alerts: incoming, count }) => {
+      setUnread(count);
+      setAlerts((list) => {
+        const ids = new Set(incoming.map((a) => a.id));
+        return [...incoming, ...list.filter((a) => !ids.has(a.id))].slice(0, LIST_LIMIT);
+      });
+      incoming.forEach((a) => toast(a.message, { id: `alert-${a.id}` }));
+    });
+    socket.on('alert:read', ({ ids, count }) => {
+      setUnread(count);
+      const readIds = ids && new Set(ids);
+      setAlerts((list) => list.map((a) => (!readIds || readIds.has(a.id) ? { ...a, isRead: true } : a)));
+    });
+
+    return () => socket.disconnect();
+  }, [prefs.notifications, userId, refreshCount]);
 
   // Close the list on outside click or Escape
   useEffect(() => {
@@ -78,7 +92,7 @@ export default function AlertBell() {
   const loadList = async () => {
     setLoading(true);
     try {
-      setAlerts(await getAlerts({ limit: 15 }));
+      setAlerts(await getAlerts({ limit: LIST_LIMIT }));
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -97,10 +111,12 @@ export default function AlertBell() {
 
   const openAlert = async (alert) => {
     setOpen(false);
-    navigate('/inventory');
+    const canSeeOrders = user?.role === 'admin' || user?.role === 'manager';
+    navigate(alert.type === 'ORDER_RECEIVED' && canSeeOrders ? '/orders' : '/inventory');
     if (alert.isRead) return;
     try {
       await markAlertRead(alert.id);
+      setAlerts((list) => list.map((a) => (a.id === alert.id ? { ...a, isRead: true } : a)));
       setUnread((n) => Math.max(0, n - 1));
     } catch (err) {
       toast.error(err.message);

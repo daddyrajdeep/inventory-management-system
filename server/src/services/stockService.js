@@ -7,18 +7,38 @@
 import mongoose from 'mongoose';
 import { Product, StockMovement, Alert } from '../models/index.js';
 import ApiError from '../utils/ApiError.js';
+import { emitAlertsRead, emitNewAlerts } from '../socket.js';
 
 const TYPES = ['IN', 'OUT', 'ADJUST'];
 
 // Runs `work(session)` as a transaction. If work() throws, EVERYTHING done with that session is undone.
 // Note: MongoDB may run work() again after a temporary conflict, so inside it only do database work.
+// Alerts created or resolved inside it are pushed to the browsers only after the commit succeeds.
 //
 //   await runInTransaction(async (session) => {
 //     await sale.save({ session });
 //     await changeStockMany({ items, type: 'OUT', userId, session });
 //   });
-export function runInTransaction(work) {
-  return mongoose.connection.transaction((session) => work(session));
+export async function runInTransaction(work) {
+  let created = [];
+  let resolved = [];
+  const result = await mongoose.connection.transaction((session) => {
+    created = []; // reset on retry so a retried attempt never pushes twice
+    resolved = [];
+    session.alertIds = created;
+    session.resolvedAlertIds = resolved;
+    return work(session);
+  });
+  emitNewAlerts(created);
+  if (resolved.length) emitAlertsRead(resolved.map(String));
+  return result;
+}
+
+// Creates an alert inside the transaction; runInTransaction pushes it live after commit.
+export async function createAlert(data, session) {
+  const [alert] = await Alert.create([data], { session });
+  session.alertIds?.push(alert._id);
+  return alert;
 }
 
 // Why did the update match nothing? Give the user a clear message.
@@ -30,17 +50,31 @@ async function explainFailure(productId, quantity, session) {
 }
 
 // Creates an alert only when stock CROSSES a threshold, so the same product does not alert again and again.
+// Crossing back up marks the product's open shortage alerts as read.
 async function createAlertIfNeeded(product, previousQty, newQty, session) {
+  const level = product.reorderLevel;
+  const resolveTypes = [];
+  if (newQty > level && previousQty <= level) resolveTypes.push('LOW_STOCK', 'OUT_OF_STOCK');
+  else if (newQty > 0 && previousQty === 0) resolveTypes.push('OUT_OF_STOCK');
+  if (resolveTypes.length) {
+    const filter = { product: product._id, type: { $in: resolveTypes }, isRead: false };
+    const open = await Alert.find(filter, '_id').session(session);
+    if (open.length) {
+      await Alert.updateMany({ _id: { $in: open.map((a) => a._id) } }, { isRead: true }, { session });
+      session.resolvedAlertIds?.push(...open.map((a) => a._id));
+    }
+  }
+
   let alert = null;
   if (newQty === 0 && previousQty > 0) {
     alert = { type: 'OUT_OF_STOCK', message: `${product.name} is out of stock` };
-  } else if (newQty > 0 && newQty <= product.reorderLevel && previousQty > product.reorderLevel) {
+  } else if (newQty > 0 && newQty <= level && previousQty > level) {
     alert = {
       type: 'LOW_STOCK',
-      message: `${product.name} is low on stock (${newQty} left, reorder level ${product.reorderLevel})`,
+      message: `${product.name} is low on stock (${newQty} left, reorder level ${level})`,
     };
   }
-  if (alert) await Alert.create([{ ...alert, product: product._id }], { session });
+  if (alert) await createAlert({ ...alert, product: product._id }, session);
 }
 
 // Changes the stock of ONE product.

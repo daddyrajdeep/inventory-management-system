@@ -1,10 +1,10 @@
-import { PurchaseOrder, Supplier, Product, Alert } from '../models/index.js';
+import { PurchaseOrder, Supplier, Product } from '../models/index.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import { audit } from '../utils/audit.js';
 import { nextNumber } from '../utils/sequence.js';
 import { serializeOrder } from '../utils/serializers.js';
-import { changeStockMany, runInTransaction } from '../services/stockService.js';
+import { changeStockMany, createAlert, runInTransaction } from '../services/stockService.js';
 
 const withNames = (query) =>
   query.populate('supplier', 'name').populate('items.product', 'name sku').populate('createdBy', 'name');
@@ -40,8 +40,10 @@ export const createOrder = asyncHandler(async (req, res) => {
   if (!sup.isActive) throw new ApiError(400, `${sup.name} is inactive`);
 
   const ids = [...new Set(items.map((i) => i.product))];
-  const found = await Product.countDocuments({ _id: { $in: ids } });
-  if (found !== ids.length) throw new ApiError(400, 'One of the products was not found');
+  const products = await Product.find({ _id: { $in: ids } }, 'name isActive');
+  if (products.length !== ids.length) throw new ApiError(400, 'One of the products was not found');
+  const inactive = products.find((p) => !p.isActive);
+  if (inactive) throw new ApiError(400, `${inactive.name} is inactive`);
 
   const order = await PurchaseOrder.create({
     orderNumber: await nextNumber('PO'),
@@ -97,7 +99,7 @@ export const receiveOrder = asyncHandler(async (req, res) => {
       reference: { model: 'PurchaseOrder', id: order._id },
       session,
     });
-    await Alert.create([{ type: 'ORDER_RECEIVED', message: `Purchase order ${order.orderNumber} was received and added to stock` }], { session });
+    await createAlert({ type: 'ORDER_RECEIVED', message: `Purchase order ${order.orderNumber} was received and added to stock` }, session);
   });
 
   await audit(req.user, 'RECEIVE', 'PurchaseOrder', req.params.id, { status: 'ordered' }, { status: 'received' });
