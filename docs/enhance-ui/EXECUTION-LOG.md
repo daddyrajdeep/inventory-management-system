@@ -29,3 +29,8 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 - Collapse button stores `sf.sidebar=collapsed` (rail width applies at ≥1280px; logic verified at 640px test viewport).
 **NOT-RUN:** desktop 1440px collapse visual (test viewport ~640px); offline banner visual (logic present).
 **Open:** old page styling (purple Dashboard etc.) remains until each page is rebuilt in P2–P8.
+
+## P2 — Login
+**Files:** `pages/Login.jsx` (split-panel ledger cover + kit form).
+**Checks:** eslint exit 0; browser: wrong password shows server-exact "Invalid email or password" in role=alert; show/hide toggle present; DEV demo hint with CopyButtons present; real admin login succeeds. Screenshot captured (single-column at test viewport; brand panel shows ≥1024px).
+**NOT-RUN:** prod-bundle demo-hint absence grep (DEV gate preserved verbatim; verified in P9 build grep).

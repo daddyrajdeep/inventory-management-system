@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import { AlertCircle, Boxes, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { loginRequest } from '../services/authService';
 import { APP_NAME } from '../config/navigation';
+import Button from '../components/ui/Button';
+import FormField from '../components/ui/FormField';
+import Input from '../components/ui/Input';
+import IconButton from '../components/ui/IconButton';
+import CopyButton from '../components/ui/CopyButton';
 
 // OWNER: Leader
 // Real login: sends email + password to POST /api/auth/login
@@ -11,6 +17,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,10 +26,9 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim() || !password) {
-      setError('Enter your email and password');
+      setError('Enter your email and password.');
       return;
     }
-
     setLoading(true);
     setError('');
     try {
@@ -36,60 +42,112 @@ export default function Login() {
     }
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400';
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-indigo-600">{APP_NAME}</h1>
-        <p className="mt-1 text-sm text-gray-500">Sign in to manage your inventory</p>
+    <div className="flex min-h-screen bg-paper">
+      {/* Brand panel — the ledger cover (desktop only) */}
+      <div className="relative hidden w-[55%] flex-col justify-between bg-ink p-12 text-on-ink lg:flex">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-sm bg-on-ink text-ink">
+            <Boxes size={16} />
+          </span>
+          <span className="text-base font-semibold">{APP_NAME}</span>
+        </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="username"
-              className={inputClass}
-            />
+        <div className="rise" aria-hidden="true">
+          <div className="max-w-sm rounded-md border border-on-ink/15 bg-surface p-5 text-ink shadow-float">
+            <p className="mb-3 text-xs font-medium text-ink-soft">Stock card</p>
+            <ul className="space-y-2.5">
+              {[
+                ['WM-001', 'Wireless Mouse', '120 pcs', 'bg-ok'],
+                ['UC-002', 'USB-C Cable', '8 pcs', 'bg-low'],
+                ['DL-004', 'Desk Lamp', '0 pcs', 'bg-out'],
+              ].map(([sku, name, qty, dot], i) => (
+                <li key={sku} className="rise flex items-center gap-3 text-[13px]" style={{ '--i': i + 1 }}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                  <span className="mono w-16 text-ink-soft">{sku}</span>
+                  <span className="flex-1">{name}</span>
+                  <span className="mono num">{qty}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 border-t border-line pt-3 text-base font-medium">Every unit accounted for.</div>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              autoComplete="current-password"
-              className={inputClass}
-            />
+        </div>
+
+        <p className="text-xs text-on-ink/60">Inventory · Sales · Purchase orders</p>
+      </div>
+
+      {/* Form panel */}
+      <div className="flex flex-1 items-center justify-center px-5 py-12">
+        <div className="rise w-full max-w-[360px]">
+          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+            <span className="flex h-7 w-7 items-center justify-center rounded-sm bg-ink text-on-ink">
+              <Boxes size={16} />
+            </span>
+            <span className="text-base font-semibold text-ink">{APP_NAME}</span>
           </div>
 
-          {error && (
-            <p className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-700" role="alert">
-              {error}
-            </p>
+          <h1 className="text-[28px] font-semibold leading-[34px] text-ink">Sign in</h1>
+          <p className="mt-1 text-sm text-ink-soft">Use your work account.</p>
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
+            <FormField label="Email">
+              <Input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); }} placeholder="you@example.com" autoComplete="username" />
+            </FormField>
+            <FormField label="Password">
+              <div className="relative">
+                <Input
+                  type={show ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="pr-10"
+                />
+                <IconButton
+                  label={show ? 'Hide password' : 'Show password'}
+                  aria-pressed={show}
+                  onClick={() => setShow((v) => !v)}
+                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+                >
+                  {show ? <EyeOff size={16} /> : <Eye size={16} />}
+                </IconButton>
+              </div>
+            </FormField>
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-sm bg-out-soft px-3 py-2 text-[13px] text-out" role="alert" style={{ animation: 'rise 200ms var(--ease) both' }}>
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <Button type="submit" loading={loading} className="w-full">
+              {loading ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
+
+          {import.meta.env.DEV && (
+            <div className="mt-6 rounded-md border border-line bg-surface p-3">
+              <p className="mb-2 text-xs font-medium text-ink-soft">Demo accounts (dev only)</p>
+              <ul className="space-y-1.5">
+                {[
+                  ['admin@demo.com', 'Admin@123'],
+                  ['priya@demo.com', 'Manager@123'],
+                  ['rahul@demo.com', 'Staff@123'],
+                ].map(([e, p]) => (
+                  <li key={e} className="flex items-center gap-2 text-xs">
+                    <span className="mono flex-1 text-ink">{e}</span>
+                    <span className="mono text-ink-soft">{p}</span>
+                    <CopyButton value={p} label={`Copy password for ${e}`} />
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-          >
-            {loading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-
-        {/* Only shown when running locally with npm run dev, never in a production build */}
-        {import.meta.env.DEV && (
-          <p className="mt-5 text-center text-xs text-gray-500">
-            Demo logins: admin@demo.com / Admin@123, priya@demo.com / Manager@123, rahul@demo.com / Staff@123
-          </p>
-        )}
+          <p className="mt-8 text-xs text-ink-soft">{APP_NAME} · {new Date().getFullYear()}</p>
+        </div>
       </div>
     </div>
   );
