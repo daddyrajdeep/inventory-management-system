@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Menu, Moon, Search, Sun } from 'lucide-react';
+import { LogOut, Menu, Moon, Search, Sun } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
+import AlertBell from './AlertBell';
 
 export default function Topbar({ onMenu }) {
   const { user, logout } = useAuth();
@@ -15,7 +16,7 @@ export default function Topbar({ onMenu }) {
 
   return (
     <header className="flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 md:px-6">
-      <button className="text-gray-600 hover:text-gray-800 md:hidden" onClick={onMenu} aria-label="Open menu">
+      <button className="md:hidden" onClick={onMenu} aria-label="Open menu">
         <Menu size={22} />
       </button>
 
@@ -24,7 +25,7 @@ export default function Topbar({ onMenu }) {
         <input
           type="text"
           placeholder="Search..."
-          className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-indigo-400"
+          className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"
         />
       </div>
 
@@ -37,15 +38,7 @@ export default function Topbar({ onMenu }) {
           {prefs.darkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        {/* TODO (Alerts owner): replace the fake count with real unread alerts */}
-        <button className="relative" aria-label="Notifications">
-          <Bell size={20} className="text-gray-600" />
-          {prefs.notifications && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-              3
-            </span>
-          )}
-        </button>
+        <AlertBell />
 
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium text-gray-800">{user.name}</p>

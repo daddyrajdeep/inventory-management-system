@@ -18,8 +18,14 @@ Protected routes need the header `Authorization: Bearer <token>` (the token come
 | POST | `/users` | admin | `{ name, email, password, role }` | `user` (201) |
 | PATCH | `/users/:id/role` | admin | `{ role }` | `user` |
 | PATCH | `/users/:id/active` | admin | `{ isActive }` | `user` |
+| GET | `/alerts?unread=true&limit=20` | any logged-in user | | `[alert]` newest first (limit 1 to 100, default 20) |
+| GET | `/alerts/unread-count` | any logged-in user | | `{ count }` |
+| PATCH | `/alerts/read-all` | any logged-in user | | `{ updated }` |
+| PATCH | `/alerts/:id/read` | any logged-in user | | `alert` |
 
 `user` = `{ id, name, email, role, isActive, settings }` (never includes the password).
+`alert` = `{ id, type, message, isRead, createdAt, product: { id, name, sku, quantity, reorderLevel } | null }`.
+Alert types: `LOW_STOCK`, `OUT_OF_STOCK`, `ORDER_RECEIVED`. Alerts are created automatically by the stock helper and are shared: marking one as read marks it for everyone.
 Roles: `admin`, `manager`, `staff`.
 
 Status codes: 200 ok, 201 created, 400 bad input, 401 not logged in or bad token,
@@ -37,6 +43,5 @@ Status codes: 200 ok, 201 created, 400 bad input, 401 not logged in or bad token
 | Sales | Asmita | `GET/POST /sales`, `GET /sales/:id` | all roles |
 | Expenses | Asmita | `GET/POST /expenses`, `DELETE /expenses/:id` | admin, manager |
 | Reports | Chandra | `GET /reports/summary`, `/reports/top-products`, `/reports/sales-by-day`, `/reports/expense-by-category` | admin, manager |
-| Alerts | Leader | `GET /alerts`, `PATCH /alerts/:id/read` | all roles |
 
 Every response uses `id` (not `_id`). Lists are returned as plain arrays.

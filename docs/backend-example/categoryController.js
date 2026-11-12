@@ -23,7 +23,7 @@ export const updateCategory = asyncHandler(async (req, res) => {
   const category = await Category.findByIdAndUpdate(
     req.params.id,
     { name, description },
-    { new: true, runValidators: true } // new: return the updated one; runValidators: apply the model rules
+    { returnDocument: 'after', runValidators: true } // after: return the updated one; runValidators: apply the model rules
   );
   if (!category) throw new ApiError(404, 'Category not found');
   res.json(category);
