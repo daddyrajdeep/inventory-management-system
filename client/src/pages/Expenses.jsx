@@ -1,8 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import {
   Wallet,
-  CheckCircle,
-  Clock,
+  CalendarDays,
   FileText,
   Download,
   Plus,
@@ -22,6 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { downloadCsv } from "../utils/csv";
 import {
   getExpenses,
   createExpense,
@@ -54,24 +54,27 @@ const categoryIcon = {
 
 const money = (n) => `₹ ${Number(n || 0).toLocaleString("en-IN")}`;
 
-function Status({ value = "Paid" }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold text-white ${
-        value === "Paid" ? "bg-green-700" : "bg-amber-600"
-      }`}
-    >
-      {value === "Paid" ? <CheckCircle size={13} /> : <Clock size={13} />}
-      {value}
-    </span>
-  );
-}
+const pad = (n) => String(n).padStart(2, "0");
+// YYYY-MM-DD in local time, for <input type="date">
+const toDayString = (value) => {
+  const d = value ? new Date(value) : new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+// Local midnight as ISO 8601 so the chosen day doesn't shift across time zones
+const dayToISO = (day) => new Date(`${day}T00:00:00`).toISOString();
 
-function Metric({ title, value, change, icon: Icon, color }) {
+const emptyForm = () => ({
+  title: "",
+  category: "office",
+  amount: "",
+  note: "",
+  date: toDayString(),
+});
+
+function Metric({ title, value, caption, icon: Icon, color }) {
   const themes = {
     purple: "border-purple-500/50 from-purple-950 to-purple-800/60 text-purple-300",
     blue: "border-blue-500/50 from-blue-950 to-blue-800/60 text-blue-300",
-    amber: "border-amber-500/50 from-amber-950 to-orange-900/60 text-amber-300",
     green: "border-green-500/50 from-green-950 to-emerald-900/60 text-green-300",
   };
 
@@ -83,7 +86,7 @@ function Metric({ title, value, change, icon: Icon, color }) {
       <div className="min-w-0">
         <p className="text-xs font-semibold text-white/80">{title}</p>
         <h3 className="mt-1 truncate text-xl font-extrabold text-white">{value}</h3>
-        <p className="mt-1 text-xs font-semibold text-green-400">{change}</p>
+        {caption && <p className="mt-1 text-xs font-semibold text-white/60">{caption}</p>}
       </div>
     </div>
   );
@@ -95,35 +98,27 @@ export default function Expenses() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
-  const [statusFilter, setStatusFilter] = useState("All Status");
   const [view, setView] = useState("list");
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState("");
   const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState({
-    title: "",
-    category: "office",
-    amount: "",
-    note: "",
-    status: "Paid",
-  });
+  const [form, setForm] = useState(emptyForm);
 
   const pageSize = 10;
 
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true);
-      const data = await getExpenses();
-      setExpenses(data);
-    } catch (err) {
-      toast.error(err.message || "Failed to load expenses");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchExpenses();
+    let active = true;
+    getExpenses()
+      .then((data) => {
+        if (active) setExpenses(data);
+      })
+      .catch((err) => toast.error(err.message || "Failed to load expenses"))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const filtered = useMemo(
@@ -132,6 +127,7 @@ export default function Expenses() {
         const q = search.toLowerCase();
         const matchesQuery =
           (e.title || "").toLowerCase().includes(q) ||
+          (e.note || "").toLowerCase().includes(q) ||
           (e.id || "").toLowerCase().includes(q);
         const matchesCat =
           categoryFilter === "All Categories" || e.category === categoryFilter;
@@ -141,9 +137,19 @@ export default function Expenses() {
   );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+  // Clamp so a delete that empties the last page doesn't leave us out of range
+  const currentPage = Math.min(page, totalPages);
+  const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const total = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+  const now = new Date();
+  const thisMonthTotal = expenses
+    .filter((e) => {
+      const d = new Date(e.date || e.createdAt);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    })
+    .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
   const categoryTotals = categories
     .map((category) => ({
@@ -157,7 +163,7 @@ export default function Expenses() {
 
   const addExpense = () => {
     setSelected(null);
-    setForm({ title: "", category: "office", amount: "", note: "", status: "Paid" });
+    setForm(emptyForm());
     setModal("add");
   };
 
@@ -168,35 +174,37 @@ export default function Expenses() {
       category: expense.category || "office",
       amount: expense.amount || "",
       note: expense.note || "",
-      status: "Paid",
+      date: toDayString(expense.date || expense.createdAt),
     });
     setModal("edit");
   };
 
   const saveExpense = async (event) => {
     event.preventDefault();
-    if (!form.title.trim() || Number(form.amount) <= 0) return;
+    if (!form.title.trim() || Number(form.amount) <= 0 || !form.date) return;
+
+    const payload = {
+      title: form.title.trim(),
+      category: form.category,
+      amount: Number(form.amount),
+      note: form.note,
+    };
 
     try {
       setSaving(true);
       if (modal === "edit" && selected) {
-        const updated = await updateExpense(selected.id, {
-          title: form.title.trim(),
-          category: form.category,
-          amount: Number(form.amount),
-          note: form.note,
-        });
+        // Only send the date if it changed, so the original timestamp is kept
+        if (form.date !== toDayString(selected.date || selected.createdAt)) {
+          payload.date = dayToISO(form.date);
+        }
+        const updated = await updateExpense(selected.id, payload);
         setExpenses((prev) =>
           prev.map((e) => (e.id === selected.id ? updated : e))
         );
         toast.success("Expense updated successfully");
       } else {
-        const created = await createExpense({
-          title: form.title.trim(),
-          category: form.category,
-          amount: Number(form.amount),
-          note: form.note,
-        });
+        payload.date = form.date === toDayString() ? new Date().toISOString() : dayToISO(form.date);
+        const created = await createExpense(payload);
         setExpenses((prev) => [created, ...prev]);
         toast.success("Expense added successfully");
       }
@@ -214,6 +222,8 @@ export default function Expenses() {
     try {
       await apiDeleteExpense(id);
       setExpenses((prev) => prev.filter((e) => e.id !== id));
+      const remaining = filtered.filter((e) => e.id !== id).length;
+      setPage((p) => Math.min(p, Math.max(1, Math.ceil(remaining / pageSize))));
       toast.success("Expense deleted");
     } catch (err) {
       toast.error(err.message || "Failed to delete expense");
@@ -233,23 +243,19 @@ export default function Expenses() {
       ]),
     ];
 
-    const csv = rows
-      .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "StockFlow-Expenses.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv("StockFlow-Expenses.csv", rows);
   };
 
   const metrics = [
-    { title: "Total Expenses", value: money(total), change: "↗ Live from MongoDB", icon: Wallet, color: "purple" },
-    { title: "Paid Expenses", value: money(total), change: "↗ 100% Cleared", icon: CheckCircle, color: "blue" },
-    { title: "Pending Expenses", value: "₹ 0", change: "None pending", icon: Clock, color: "amber" },
-    { title: "Expense Records", value: expenses.length, change: "Total invoices", icon: FileText, color: "green" },
+    { title: "Total Expenses", value: money(total), caption: "All recorded expenses", icon: Wallet, color: "purple" },
+    {
+      title: "This Month",
+      value: money(thisMonthTotal),
+      caption: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      icon: CalendarDays,
+      color: "blue",
+    },
+    { title: "Expense Records", value: expenses.length, caption: "Entries in database", icon: FileText, color: "green" },
   ];
 
   const pieColors = ["#a855f7", "#2563eb", "#06b6d4", "#10b981", "#f59e0b", "#ec4899"];
@@ -276,7 +282,7 @@ export default function Expenses() {
           <div>
             <h1 className="text-2xl font-extrabold">Expenses</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Track business expenses connected to the live database.
+              Track and categorise business expenses.
             </p>
           </div>
         </div>
@@ -297,7 +303,7 @@ export default function Expenses() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {metrics.map((item) => (
           <Metric key={item.title} {...item} />
         ))}
@@ -306,7 +312,7 @@ export default function Expenses() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-indigo-900 dark:bg-[#0c1230]">
           <h3 className="font-extrabold">Expenses by Category</h3>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Live distribution from MongoDB Atlas</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Share of total spend by category</p>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-6">
             <div
@@ -428,7 +434,7 @@ export default function Expenses() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12 text-gray-500">
-            <Loader2 className="animate-spin mr-2" size={24} /> Loading expenses from MongoDB...
+            <Loader2 className="animate-spin mr-2" size={24} /> Loading expenses...
           </div>
         ) : view === "list" ? (
           <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700">
@@ -449,7 +455,7 @@ export default function Expenses() {
                   const Icon = categoryIcon[e.category] || Receipt;
                   return (
                     <tr key={e.id} className="border-t border-gray-100 hover:bg-purple-50/60 dark:border-slate-800 dark:hover:bg-indigo-950/50">
-                      <td className="px-3 py-3 text-gray-500">{(page - 1) * pageSize + index + 1}</td>
+                      <td className="px-3 py-3 text-gray-500">{(currentPage - 1) * pageSize + index + 1}</td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-3">
                           <span className="rounded-xl bg-purple-100 p-2.5 text-purple-700 dark:bg-purple-600/30 dark:text-purple-300">
@@ -524,23 +530,23 @@ export default function Expenses() {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-300">
           <span>
-            Showing {filtered.length ? (page - 1) * pageSize + 1 : 0}
-            {' – '}{Math.min(page * pageSize, filtered.length)}
+            Showing {filtered.length ? (currentPage - 1) * pageSize + 1 : 0}
+            {' – '}{Math.min(currentPage * pageSize, filtered.length)}
             {' of '}{filtered.length} expenses
           </span>
           <div className="flex items-center gap-2">
             <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
+              disabled={currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
               className="rounded-lg border border-gray-300 p-2 disabled:opacity-30 dark:border-slate-700"
             >
               <ChevronLeft size={17} />
             </button>
-            <span className="rounded-lg bg-purple-600 px-3 py-2 font-bold text-white">{page}</span>
+            <span className="rounded-lg bg-purple-600 px-3 py-2 font-bold text-white">{currentPage}</span>
             <span>of {totalPages}</span>
             <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(currentPage + 1)}
               className="rounded-lg border border-gray-300 p-2 disabled:opacity-30 dark:border-slate-700"
             >
               <ChevronRight size={17} />
@@ -579,7 +585,7 @@ export default function Expenses() {
             ) : (
               <>
                 <h2 className="text-xl font-extrabold">{modal === "edit" ? "Edit Expense" : "Add New Expense"}</h2>
-                <p className="mb-5 mt-1 text-sm text-gray-500">Persists directly to MongoDB Atlas.</p>
+                <p className="mb-5 mt-1 text-sm text-gray-500">All fields except the note are required.</p>
                 <form onSubmit={saveExpense} className="space-y-4">
                   <label className="block text-sm font-semibold">
                     Expense Title
@@ -614,6 +620,16 @@ export default function Expenses() {
                       value={form.amount}
                       onChange={(e) => setForm({ ...form, amount: e.target.value })}
                       placeholder="Enter amount"
+                      className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 dark:border-slate-700 dark:bg-[#080e25]"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold">
+                    Date
+                    <input
+                      required
+                      type="date"
+                      value={form.date}
+                      onChange={(e) => setForm({ ...form, date: e.target.value })}
                       className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 dark:border-slate-700 dark:bg-[#080e25]"
                     />
                   </label>

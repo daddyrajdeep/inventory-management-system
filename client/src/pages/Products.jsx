@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
@@ -19,6 +20,7 @@ const emptyForm = {
   reorderLevel: '',
   unit: '',
   description: '',
+  isActive: true,
 };
 
 function getStockStatus(product) {
@@ -57,12 +59,22 @@ function validate(form) {
 export default function Products() {
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'manager';
+  const canDelete = user?.role === 'admin';
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [query, setQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') ?? '';
+  const [query, setQuery] = useState(urlSearch);
+  const [seenUrlSearch, setSeenUrlSearch] = useState(urlSearch);
+  if (urlSearch !== seenUrlSearch) {
+    // a new search from the top bar while already on this page
+    setSeenUrlSearch(urlSearch);
+    setQuery(urlSearch);
+  }
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [stockFilter, setStockFilter] = useState('all');
+  const [showInactive, setShowInactive] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -73,8 +85,11 @@ export default function Products() {
     let active = true;
     const loadProducts = async () => {
       try {
-        const list = await getProducts();
-        if (active) setProducts(list);
+        const list = await getProducts(showInactive ? { includeInactive: true } : undefined);
+        if (active) {
+          setProducts(list);
+          setLoadError('');
+        }
       } catch (err) {
         if (active) setLoadError(err.message || 'Unable to load products');
       } finally {
@@ -86,11 +101,11 @@ export default function Products() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [showInactive]);
 
   const refresh = async () => {
     try {
-      const list = await getProducts();
+      const list = await getProducts(showInactive ? { includeInactive: true } : undefined);
       setProducts(list);
       setLoadError('');
     } catch (err) {
@@ -128,6 +143,7 @@ export default function Products() {
             reorderLevel: product.reorderLevel == null ? '' : String(product.reorderLevel),
             unit: product.unit ?? '',
             description: product.description ?? '',
+            isActive: product.isActive !== false,
           }
         : { ...emptyForm }
     );
@@ -150,6 +166,7 @@ export default function Products() {
       reorderLevel: form.reorderLevel.trim() ? Number(form.reorderLevel) : 10,
       unit: form.unit.trim() || 'pcs',
       description: form.description.trim(),
+      ...(editingProduct ? { isActive: form.isActive } : {}),
     };
 
     setSaving(true);
@@ -231,6 +248,14 @@ export default function Products() {
           <option value="low">Low stock</option>
           <option value="out">Out of stock</option>
         </select>
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
+          Show inactive
+        </label>
       </div>
 
       {loading ? (
@@ -259,21 +284,20 @@ export default function Products() {
                     >
                       <Pencil size={16} />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(product)}
-                      aria-label={`Delete ${product.name}`}
-                      className="text-gray-500 hover:text-red-600"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(product)}
+                        aria-label={`Delete ${product.name}`}
+                        className="text-gray-500 hover:text-red-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                <span>{product.category}</span>
-                <span>★ {product.rating ?? 0}</span>
-              </div>
+              <div className="mt-2 text-xs text-gray-500">{product.category}</div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <span className="font-semibold text-gray-900">{formatCurrency(product.price)}</span>
                 {getStockStatus(product) === 'out' ? (
@@ -369,6 +393,16 @@ export default function Products() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </FormField>
+          {editingProduct && (
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+              />
+              Active (inactive products are hidden from lists but keep their history)
+            </label>
+          )}
           {editingProduct && (
             <div className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">
               Current stock: {editingProduct.quantity}. Stock is changed from the Inventory page.

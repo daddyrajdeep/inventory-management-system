@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ShoppingCart,
   FileText,
@@ -7,13 +7,10 @@ import {
   Download,
   Plus,
   Search,
-  Laptop,
-  Mouse,
-  Keyboard,
-  Headphones,
   Eye,
-  Check,
-  Clock,
+  Banknote,
+  Smartphone,
+  CreditCard,
   X,
   ChevronLeft,
   ChevronRight,
@@ -24,40 +21,54 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import "./Sales.css";
-import { getSales, createSale } from "../services/saleService";
+import { useAuth } from "../context/AuthContext";
+import { getSales, getSaleById, createSale } from "../services/saleService";
 import { getProducts } from "../services/productService";
 import { getTopProducts, getSalesByDay } from "../services/reportService";
+import { downloadCsv } from "../utils/csv";
 
 const money = (value) =>
   "₹ " + Number(value || 0).toLocaleString("en-IN");
 
-function StatusBadge({ status = "Paid" }) {
-  const isPaid = status === "Paid" || status === "paid";
-  const Icon = isPaid ? Check : Clock;
+const units = (n) => `${n} ${n === 1 ? "unit" : "units"}`;
+
+const PAYMENT_METHODS = {
+  cash: { label: "Cash", Icon: Banknote },
+  upi: { label: "UPI", Icon: Smartphone },
+  card: { label: "Card", Icon: CreditCard },
+};
+
+function PaymentBadge({ method }) {
+  const { label, Icon } = PAYMENT_METHODS[method] || { label: method, Icon: Banknote };
 
   return (
-    <span className={`sales-status ${isPaid ? "paid" : "pending"}`}>
+    <span className={`sales-status ${method}`}>
       <Icon size={13} />
-      {isPaid ? "Paid" : "Pending"}
+      {label}
     </span>
   );
 }
 
 export default function Sales() {
+  const { user } = useAuth();
+  const canViewReports = user?.role === "admin" || user?.role === "manager";
+
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [salesTrend, setSalesTrend] = useState([]);
+  const [reportsError, setReportsError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("All Payments");
-  const [activeTab, setActiveTab] = useState("All Sales");
   const [view, setView] = useState("list");
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState("");
   const [selectedSale, setSelectedSale] = useState(null);
+  const [saleDetail, setSaleDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const [form, setForm] = useState({
     customerName: "",
@@ -69,76 +80,85 @@ export default function Sales() {
 
   const pageSize = 10;
 
-  const loadAllData = async () => {
-    try {
-      setLoading(true);
-      const [salesData, prodData] = await Promise.all([
-        getSales(),
-        getProducts({ status: 'ok' }).catch(() => getProducts()),
-      ]);
-      setSales(salesData || []);
-      setProducts(prodData || []);
-
-      // Also try loading Chandra's live analytics
-      try {
-        const [top, trend] = await Promise.all([
-          getTopProducts({ limit: 4, sortBy: "revenue" }),
-          getSalesByDay({ days: 6 }),
-        ]);
-        if (top && top.length) setTopProducts(top);
-        if (trend && trend.length) setSalesTrend(trend);
-      } catch (err) {
-        // Fallback gracefully if analytics restricted by role
-      }
-    } catch (err) {
-      toast.error(err.message || "Failed to load sales data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAllData();
+  const loadReports = useCallback(() => {
+    Promise.all([
+      getTopProducts({ limit: 4, sortBy: "quantity", days: 30 }),
+      getSalesByDay({ days: 6 }),
+    ])
+      .then(([top, trend]) => {
+        setTopProducts(top || []);
+        setSalesTrend(trend || []);
+        setReportsError(false);
+      })
+      .catch(() => setReportsError(true));
   }, []);
 
-  const filteredSales = useMemo(() => {
-    return sales.filter((sale) => {
-      const inv = sale.invoiceNumber || sale.invoice || "";
-      const cust = sale.customerName || sale.customer || "";
-      const pay = sale.paymentMethod || sale.payment || "cash";
+  useEffect(() => {
+    const loadAllData = async () => {
+      try {
+        const [salesData, prodData] = await Promise.all([getSales(), getProducts()]);
+        setSales(salesData || []);
+        setProducts(prodData || []);
+      } catch (err) {
+        toast.error(err.message || "Failed to load sales data");
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    loadAllData();
+    if (canViewReports) loadReports();
+  }, [canViewReports, loadReports]);
+
+  const filteredSales = useMemo(() => {
+    const term = search.toLowerCase();
+    return sales.filter((sale) => {
       const matchesSearch =
-        inv.toLowerCase().includes(search.toLowerCase()) ||
-        cust.toLowerCase().includes(search.toLowerCase());
+        sale.invoiceNumber.toLowerCase().includes(term) ||
+        sale.customerName.toLowerCase().includes(term);
 
       const matchesPayment =
-        paymentFilter === "All Payments" ||
-        pay.toLowerCase() === paymentFilter.toLowerCase();
+        paymentFilter === "All Payments" || sale.paymentMethod === paymentFilter;
 
       return matchesSearch && matchesPayment;
     });
   }, [sales, search, paymentFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
   const visibleSales = filteredSales.slice(
-    (page - 1) * pageSize,
-    page * pageSize
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
 
-  const totalSalesAmount = sales.reduce(
-    (sum, s) => sum + (Number(s.totalAmount || s.amount) || 0),
-    0
-  );
+  const totalSalesAmount = sales.reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
 
   const uniqueCustomers = new Set(
-    sales.map((s) => s.customerName || s.customer).filter(Boolean)
+    sales.map((s) => s.customerName).filter((name) => name && !/^walk-in/i.test(name))
   ).size;
+
+  const maxTrendSales = Math.max(0, ...salesTrend.map((d) => d.sales || 0));
+  const maxUnitsSold = Math.max(0, ...topProducts.map((p) => p.unitsSold || 0));
+
+  const openSaleDetail = async (sale) => {
+    setSelectedSale(sale);
+    setSaleDetail(null);
+    setModal("view");
+    try {
+      setDetailLoading(true);
+      setSaleDetail(await getSaleById(sale.id));
+    } catch (err) {
+      toast.error(err.message || "Failed to load sale details");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const openNewSale = () => {
     setSelectedSale(null);
     setForm({
       customerName: "",
-      productId: products[0]?.id || "",
+      productId: products.find((p) => p.quantity > 0)?.id || "",
       quantity: 1,
       discount: 0,
       paymentMethod: "cash",
@@ -165,19 +185,20 @@ export default function Sales() {
       setSubmitting(true);
       const newSale = await createSale({
         items: [{ product: form.productId, quantity: Number(form.quantity) }],
-        customerName: form.customerName.trim() || "Walk-in Customer",
+        customerName: form.customerName.trim(),
         paymentMethod: form.paymentMethod,
         discount: Number(form.discount) || 0,
       });
 
       setSales((prev) => [newSale, ...prev]);
-      toast.success(`Sale created: ${newSale.invoiceNumber || 'Saved'}`);
+      toast.success(`Sale created: ${newSale.invoiceNumber}`);
       setModal("");
       setPage(1);
 
-      // Refresh product stock
+      // Refresh product stock and reports
       const updatedProducts = await getProducts();
-      setProducts(updatedProducts);
+      setProducts(updatedProducts || []);
+      if (canViewReports) loadReports();
     } catch (err) {
       toast.error(err.message || "Failed to create sale");
     } finally {
@@ -186,68 +207,52 @@ export default function Sales() {
   };
 
   const exportCSV = () => {
-    const headers = ["Invoice", "Customer", "Items", "Amount", "Payment", "Date"];
+    const headers = ["Invoice", "Customer", "Units", "Amount", "Payment", "Date"];
     const rows = filteredSales.map((s) => [
-      s.invoiceNumber || s.invoice,
-      s.customerName || s.customer || "Walk-in",
-      s.itemCount || s.items || 1,
-      s.totalAmount || s.amount,
-      s.paymentMethod || s.payment || "cash",
-      new Date(s.createdAt || s.date).toLocaleDateString(),
+      s.invoiceNumber,
+      s.customerName,
+      s.itemCount,
+      s.totalAmount,
+      PAYMENT_METHODS[s.paymentMethod]?.label || s.paymentMethod,
+      new Date(s.createdAt).toLocaleDateString(),
     ]);
 
-    const csv = [headers, ...rows]
-      .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "stockflow-sales.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadCsv("stockflow-sales.csv", [headers, ...rows]);
   };
 
   const stats = [
     {
       title: "Total Sales",
       value: money(totalSalesAmount),
-      change: "Live Revenue",
+      note: "Revenue across listed sales",
       Icon: ShoppingCart,
       color: "purple",
     },
     {
       title: "Total Orders",
       value: sales.length,
-      change: "Recorded Invoices",
+      note: "Invoices recorded",
       Icon: FileText,
       color: "blue",
     },
     {
       title: "Total Customers",
-      value: uniqueCustomers || 1,
-      change: "Active Buyers",
+      value: uniqueCustomers,
+      note: "Named customers, excl. walk-in",
       Icon: Users,
       color: "green",
     },
     {
-      title: "Completed Orders",
-      value: sales.length,
-      change: "100% Fulfilled",
+      title: "Average Order",
+      value: money(sales.length ? Math.round(totalSalesAmount / sales.length) : 0),
+      note: "Total sales ÷ orders",
       Icon: TrendingUp,
       color: "amber",
     },
   ];
 
-  const defaultTopProducts = [
-    { name: 'Desk Lamp', unitsSold: 28, revenue: 25172, sku: 'DL-004' },
-    { name: 'Water Bottle 1L', unitsSold: 25, revenue: 8725, sku: 'WB-005' },
-    { name: 'HDMI Cable', unitsSold: 24, revenue: 7896, sku: 'HC-007' },
-    { name: 'Wireless Mouse', unitsSold: 20, revenue: 11980, sku: 'WM-001' },
-  ];
-
-  const displayTopProducts = topProducts.length ? topProducts : defaultTopProducts;
+  const detail = saleDetail && saleDetail.id === selectedSale?.id ? saleDetail : null;
+  const emptyMessage = sales.length === 0 ? "No sales yet" : "No sales match your filters.";
 
   return (
     <div className="sales-page">
@@ -279,7 +284,7 @@ export default function Sales() {
 
       {/* KPI Cards */}
       <div className="sales-metrics">
-        {stats.map(({ title, value, change, Icon, color }) => (
+        {stats.map(({ title, value, note, Icon, color }) => (
           <div className={`sales-metric ${color}`} key={title}>
             <div className="sales-metric-icon">
               <Icon size={23} />
@@ -287,9 +292,7 @@ export default function Sales() {
             <div>
               <span>{title}</span>
               <strong>{value}</strong>
-              <small>
-                <b style={{ color: "#16c784" }}>↗ {change}</b> in MongoDB
-              </small>
+              <small>{note}</small>
             </div>
           </div>
         ))}
@@ -301,64 +304,68 @@ export default function Sales() {
           <div className="sales-card-heading">
             <div>
               <h3>Recent Sales Velocity</h3>
-              <p>Daily sales performance</p>
+              <p>Daily sales, last 6 days</p>
             </div>
           </div>
 
-          <div className="sales-chart">
-            <div className="sales-chart-plot" style={{ marginLeft: 0 }}>
-              <div className="sales-bars">
-                {(salesTrend.length
-                  ? salesTrend
-                  : [
-                      { date: 'Day 1', sales: 4500 },
-                      { date: 'Day 2', sales: 8200 },
-                      { date: 'Day 3', sales: 12000 },
-                      { date: 'Day 4', sales: 15400 },
-                      { date: 'Day 5', sales: 22000 },
-                      { date: 'Today', sales: 28596 },
-                    ]
-                ).map((item, idx) => (
-                  <div className="sales-bar-column" key={idx}>
-                    <div
-                      className="sales-bar"
-                      style={{
-                        height: `${Math.min(100, Math.max(15, ((item.sales || 0) / 30000) * 100))}%`,
-                      }}
-                      title={`${item.date}: ${money(item.sales)}`}
-                    />
-                    <span>{item.date?.slice?.(5) || item.date}</span>
-                  </div>
-                ))}
+          {!canViewReports ? (
+            <p className="sales-empty">Reports are available to managers and admins.</p>
+          ) : reportsError ? (
+            <p className="sales-empty">Couldn't load sales trend.</p>
+          ) : maxTrendSales === 0 ? (
+            <p className="sales-empty">No sales yet</p>
+          ) : (
+            <div className="sales-chart">
+              <div className="sales-chart-plot" style={{ marginLeft: 0 }}>
+                <div className="sales-bars">
+                  {salesTrend.map((item) => (
+                    <div className="sales-bar-column" key={item.date}>
+                      <div
+                        className={`sales-bar${item.sales > 0 ? "" : " zero"}`}
+                        style={{ height: `${((item.sales || 0) / maxTrendSales) * 100}%` }}
+                        title={`${item.date}: ${money(item.sales)}`}
+                      />
+                      <span>{item.date.slice(5)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </section>
 
         <section className="sales-top-card">
           <div className="sales-card-heading">
             <div>
               <h3>Top Selling Products</h3>
-              <p>Calculated live by Chandra's Report Engine</p>
+              <p>By units sold, last 30 days</p>
             </div>
           </div>
 
-          <div className="sales-product-list">
-            {displayTopProducts.map((prod, idx) => (
-              <div className="sales-product" key={idx}>
-                <div className="sales-product-symbol">
-                  <Package size={20} />
-                </div>
-                <div className="sales-product-info">
-                  <strong>{prod.name}</strong>
-                  <div className="sales-product-track">
-                    <i style={{ width: `${Math.min(100, ((prod.unitsSold || 10) / 30) * 100)}%` }} />
+          {!canViewReports ? (
+            <p className="sales-empty">Reports are available to managers and admins.</p>
+          ) : reportsError ? (
+            <p className="sales-empty">Couldn't load top products.</p>
+          ) : topProducts.length === 0 ? (
+            <p className="sales-empty">No sales yet</p>
+          ) : (
+            <div className="sales-product-list">
+              {topProducts.map((prod) => (
+                <div className="sales-product" key={prod.productId}>
+                  <div className="sales-product-symbol">
+                    <Package size={20} />
                   </div>
+                  <div className="sales-product-info">
+                    <strong>{prod.name}</strong>
+                    <div className="sales-product-track">
+                      <i style={{ width: `${maxUnitsSold ? (prod.unitsSold / maxUnitsSold) * 100 : 0}%` }} />
+                    </div>
+                  </div>
+                  <span>{units(prod.unitsSold)}</span>
                 </div>
-                <span>{prod.unitsSold || 0} units</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
@@ -367,7 +374,7 @@ export default function Sales() {
         <div className="sales-table-heading">
           <div>
             <h3>Sales Transactions</h3>
-            <p>Saved permanently in MongoDB Atlas.</p>
+            <p>Invoices recorded, newest first.</p>
           </div>
           <button className="sales-primary-btn" onClick={openNewSale}>
             <Plus size={17} /> New Sale
@@ -421,7 +428,7 @@ export default function Sales() {
         {loading ? (
           <div style={{ textAlign: "center", padding: "40px", color: "var(--s-muted)" }}>
             <Loader2 className="animate-spin" size={24} style={{ display: "inline-block", marginRight: "8px" }} />
-            Loading sales from database...
+            Loading sales...
           </div>
         ) : view === "list" ? (
           <div className="sales-table-wrap">
@@ -440,15 +447,15 @@ export default function Sales() {
               </thead>
               <tbody>
                 {visibleSales.map((sale, index) => (
-                  <tr key={sale.id || index}>
-                    <td>{(page - 1) * pageSize + index + 1}</td>
-                    <td><span className="sales-invoice">{sale.invoiceNumber || sale.invoice}</span></td>
-                    <td><strong>{sale.customerName || sale.customer || "Walk-in"}</strong></td>
-                    <td>{sale.itemCount || sale.items?.length || 1} units</td>
-                    <td><strong>{money(sale.totalAmount || sale.amount)}</strong></td>
-                    <td><StatusBadge status={sale.paymentMethod || sale.payment} /></td>
+                  <tr key={sale.id}>
+                    <td>{(currentPage - 1) * pageSize + index + 1}</td>
+                    <td><span className="sales-invoice">{sale.invoiceNumber}</span></td>
+                    <td><strong>{sale.customerName}</strong></td>
+                    <td>{units(sale.itemCount)}</td>
+                    <td><strong>{money(sale.totalAmount)}</strong></td>
+                    <td><PaymentBadge method={sale.paymentMethod} /></td>
                     <td>
-                      {new Date(sale.createdAt || sale.date).toLocaleDateString("en-US", {
+                      {new Date(sale.createdAt).toLocaleDateString("en-US", {
                         month: "short",
                         day: "2-digit",
                         year: "numeric",
@@ -456,13 +463,7 @@ export default function Sales() {
                     </td>
                     <td>
                       <div className="sales-row-actions">
-                        <button
-                          title="View Details"
-                          onClick={() => {
-                            setSelectedSale(sale);
-                            setModal("view");
-                          }}
-                        >
+                        <button title="View Details" onClick={() => openSaleDetail(sale)}>
                           <Eye size={16} />
                         </button>
                       </div>
@@ -473,7 +474,7 @@ export default function Sales() {
                 {visibleSales.length === 0 && (
                   <tr>
                     <td colSpan="8" className="sales-empty">
-                      No sales transactions found.
+                      {emptyMessage}
                     </td>
                   </tr>
                 )}
@@ -482,58 +483,52 @@ export default function Sales() {
           </div>
         ) : (
           <div className="sales-grid">
-            {visibleSales.map((sale, idx) => (
-              <article className="sales-transaction-card" key={sale.id || idx}>
+            {visibleSales.map((sale) => (
+              <article className="sales-transaction-card" key={sale.id}>
                 <div className="sales-transaction-top">
-                  <span className="sales-invoice">{sale.invoiceNumber || sale.invoice}</span>
-                  <StatusBadge status={sale.paymentMethod || sale.payment} />
+                  <span className="sales-invoice">{sale.invoiceNumber}</span>
+                  <PaymentBadge method={sale.paymentMethod} />
                 </div>
-                <h4>{sale.customerName || sale.customer || "Walk-in"}</h4>
+                <h4>{sale.customerName}</h4>
                 <p>
-                  {new Date(sale.createdAt || sale.date).toLocaleDateString()} ·{" "}
-                  {sale.itemCount || 1} units
+                  {new Date(sale.createdAt).toLocaleDateString()} · {units(sale.itemCount)}
                 </p>
                 <strong className="sales-transaction-amount">
-                  {money(sale.totalAmount || sale.amount)}
+                  {money(sale.totalAmount)}
                 </strong>
                 <div className="sales-row-actions">
-                  <button
-                    onClick={() => {
-                      setSelectedSale(sale);
-                      setModal("view");
-                    }}
-                  >
+                  <button onClick={() => openSaleDetail(sale)}>
                     <Eye size={16} /> View
                   </button>
                 </div>
               </article>
             ))}
             {visibleSales.length === 0 && (
-              <p className="sales-empty">No sales transactions found.</p>
+              <p className="sales-empty">{emptyMessage}</p>
             )}
           </div>
         )}
 
         <div className="sales-footer">
           <span>
-            Showing {filteredSales.length === 0 ? 0 : (page - 1) * pageSize + 1}
+            Showing {filteredSales.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
             {" – "}
-            {Math.min(page * pageSize, filteredSales.length)}
+            {Math.min(currentPage * pageSize, filteredSales.length)}
             {" of "}{filteredSales.length} transactions
           </span>
 
           <div className="sales-pagination">
             <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
             >
               <ChevronLeft size={17} />
             </button>
-            <span>{page}</span>
+            <span>{currentPage}</span>
             <small>of {totalPages}</small>
             <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
             >
               <ChevronRight size={17} />
             </button>
@@ -552,17 +547,48 @@ export default function Sales() {
             {modal === "view" ? (
               <>
                 <h2>Sale Details</h2>
-                <p>Recorded invoice from MongoDB Atlas.</p>
+                <p>{units(selectedSale.itemCount)} across {selectedSale.lineCount} {selectedSale.lineCount === 1 ? "product" : "products"}.</p>
                 <div className="sales-detail-list">
-                  <span>Invoice</span><strong>{selectedSale?.invoiceNumber || selectedSale?.invoice}</strong>
-                  <span>Customer</span><strong>{selectedSale?.customerName || selectedSale?.customer || "Walk-in"}</strong>
-                  <span>Amount</span><strong>{money(selectedSale?.totalAmount || selectedSale?.amount)}</strong>
-                  <span>Payment Method</span><strong style={{ textTransform: "uppercase" }}>{selectedSale?.paymentMethod || "Cash"}</strong>
-                  <span>Sold By</span><strong>{selectedSale?.soldBy || "Staff"}</strong>
+                  <span>Invoice</span><strong>{selectedSale.invoiceNumber}</strong>
+                  <span>Customer</span><strong>{selectedSale.customerName}</strong>
+                  <span>Discount</span><strong>{money(selectedSale.discount)}</strong>
+                  <span>Amount</span><strong>{money(selectedSale.totalAmount)}</strong>
+                  <span>Payment Method</span><strong>{PAYMENT_METHODS[selectedSale.paymentMethod]?.label || selectedSale.paymentMethod}</strong>
+                  <span>Sold By</span><strong>{selectedSale.soldBy || "—"}</strong>
                   <span>Date</span>
-                  <strong>
-                    {new Date(selectedSale?.createdAt || selectedSale?.date).toLocaleString()}
-                  </strong>
+                  <strong>{new Date(selectedSale.createdAt).toLocaleString()}</strong>
+                </div>
+
+                <div className="sales-items-wrap">
+                  {detailLoading ? (
+                    <p className="sales-empty">
+                      <Loader2 className="animate-spin" size={16} style={{ display: "inline-block", marginRight: "6px" }} />
+                      Loading items...
+                    </p>
+                  ) : detail ? (
+                    <table className="sales-items-table">
+                      <thead>
+                        <tr>
+                          <th>Product</th>
+                          <th>Qty</th>
+                          <th>Unit Price</th>
+                          <th>Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detail.items.map((item, idx) => (
+                          <tr key={`${item.product}-${idx}`}>
+                            <td>{item.name}</td>
+                            <td>{item.quantity}</td>
+                            <td>{money(item.unitPrice)}</td>
+                            <td>{money(item.subtotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="sales-empty">Couldn't load line items.</p>
+                  )}
                 </div>
               </>
             ) : (

@@ -308,11 +308,16 @@
 
 .sales-bar {
   width: min(38px,65%);
-  min-height: 8px;
+  min-height: 3px;
   border-radius: 7px 7px 2px 2px;
   background: linear-gradient(180deg,#c084fc,#7c3aed);
   box-shadow: 0 0 14px #9333ea33;
   transition: height .3s;
+}
+
+.sales-bar.zero {
+  min-height: 0;
+  box-shadow: none;
 }
 
 .sales-bar-column span {
@@ -552,19 +557,19 @@
   white-space: nowrap;
 }
 
-.sales-status.paid {
+.sales-status.cash {
   background: #047857 !important;
   border-color: #059669 !important;
 }
 
-.sales-status.pending {
-  background: #b45309 !important;
-  border-color: #d97706 !important;
+.sales-status.upi {
+  background: #6d28d9 !important;
+  border-color: #7c3aed !important;
 }
 
-.sales-status.cancelled {
-  background: #b91c1c !important;
-  border-color: #dc2626 !important;
+.sales-status.card {
+  background: #0369a1 !important;
+  border-color: #0284c7 !important;
 }
 
 .sales-row-actions {
@@ -790,6 +795,43 @@
 
 .sales-detail-list strong {
   text-align: right;
+  color: var(--s-text);
+}
+
+.sales-items-wrap {
+  margin-top: 16px;
+  overflow-x: auto;
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+}
+
+.sales-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.sales-items-table th,
+.sales-items-table td {
+  padding: 9px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sales-items-table th:first-child,
+.sales-items-table td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+
+.sales-items-table th {
+  color: var(--s-muted);
+  background: var(--s-soft);
+  font-weight: 800;
+}
+
+.sales-items-table td {
+  border-top: 1px solid var(--s-border);
   color: var(--s-text);
 }
 
