@@ -1,113 +1,644 @@
-import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
-  Search, Plus, Download, CalendarDays, ChevronDown, MoreHorizontal,
-  Wallet, Truck, Building2, Megaphone, Package, CheckCircle2,
-  Clock3, AlertCircle, X, Receipt
+  Wallet,
+  CheckCircle,
+  Clock,
+  FileText,
+  Download,
+  Plus,
+  Search,
+  Eye,
+  Pencil,
+  Trash2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  List,
+  LayoutGrid,
+  ShoppingBag,
+  Building2,
+  Briefcase,
+  Receipt,
+  Loader2,
 } from "lucide-react";
-import "./SalesExpenses.css";
+import toast from "react-hot-toast";
+import {
+  getExpenses,
+  createExpense,
+  updateExpense,
+  deleteExpense as apiDeleteExpense,
+} from "../services/expenseService";
 
-const initialExpenses = [
-  { id: "EXP-208", title: "Office Rent", category: "Utilities", vendor: "City Properties", amount: 25000, date: "Jul 08, 2026", status: "Paid", method: "Bank Transfer" },
-  { id: "EXP-207", title: "Product Delivery", category: "Shipping", vendor: "FastTrack Logistics", amount: 2850, date: "Jul 07, 2026", status: "Pending", method: "UPI" },
-  { id: "EXP-206", title: "Social Media Ads", category: "Marketing", vendor: "Meta Ads", amount: 4500, date: "Jul 06, 2026", status: "Paid", method: "Card" },
-  { id: "EXP-205", title: "Packaging Materials", category: "Inventory", vendor: "PackWell Supplies", amount: 3200, date: "Jul 05, 2026", status: "Paid", method: "Bank Transfer" },
-  { id: "EXP-204", title: "Internet & Phone", category: "Utilities", vendor: "Broadband Co.", amount: 1499, date: "Jul 04, 2026", status: "Overdue", method: "—" },
-];
+const categories = ["office", "salaries", "professional", "other"];
 
-const money = (n) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(n);
+const categoryLabels = {
+  office: "Office & Rent",
+  salaries: "Salaries & Wages",
+  professional: "Professional Services",
+  other: "Other Expenses",
+};
 
-function ExpenseStatus({ status }) {
-  const Icon = status === "Paid" ? CheckCircle2 : status === "Pending" ? Clock3 : AlertCircle;
-  return <span className={`se-status ${status.toLowerCase()}`}><Icon size={12}/>{status}</span>;
+const categoryStyle = {
+  office: "bg-blue-700 text-white",
+  salaries: "bg-teal-700 text-white",
+  professional: "bg-purple-700 text-white",
+  other: "bg-pink-700 text-white",
+};
+
+const categoryIcon = {
+  office: Building2,
+  salaries: Briefcase,
+  professional: Receipt,
+  other: ShoppingBag,
+};
+
+const money = (n) => `₹ ${Number(n || 0).toLocaleString("en-IN")}`;
+
+function Status({ value = "Paid" }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold text-white ${
+        value === "Paid" ? "bg-green-700" : "bg-amber-600"
+      }`}
+    >
+      {value === "Paid" ? <CheckCircle size={13} /> : <Clock size={13} />}
+      {value}
+    </span>
+  );
 }
 
-const categoryIcon = { Utilities: Building2, Shipping: Truck, Marketing: Megaphone, Inventory: Package, Other: Wallet };
-
-export default function Expenses() {
-  const [expenses, setExpenses] = useState(initialExpenses);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("All");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", category: "Utilities", vendor: "", amount: "", status: "Paid", method: "Bank Transfer" });
-
-  const filtered = useMemo(() => expenses.filter((expense) => {
-    const matchesSearch = `${expense.id} ${expense.title} ${expense.vendor} ${expense.category}`.toLowerCase().includes(search.toLowerCase());
-    return matchesSearch && (filter === "All" || expense.status === filter);
-  }), [expenses, search, filter]);
-
-  const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const paid = expenses.filter((expense) => expense.status === "Paid").reduce((sum, expense) => sum + expense.amount, 0);
-  const pending = expenses.filter((expense) => expense.status !== "Paid").reduce((sum, expense) => sum + expense.amount, 0);
-
-  function addExpense(e) {
-    e.preventDefault();
-    if (!form.title.trim() || !form.vendor.trim() || Number(form.amount) <= 0) return;
-    const newExpense = {
-      ...form, id: `EXP-${209 + expenses.length - initialExpenses.length}`,
-      title: form.title.trim(), vendor: form.vendor.trim(), amount: Number(form.amount),
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" })
-    };
-    setExpenses((prev) => [newExpense, ...prev]);
-    setForm({ title: "", category: "Utilities", vendor: "", amount: "", status: "Paid", method: "Bank Transfer" });
-    setModalOpen(false);
-  }
+function Metric({ title, value, change, icon: Icon, color }) {
+  const themes = {
+    purple: "border-purple-500/50 from-purple-950 to-purple-800/60 text-purple-300",
+    blue: "border-blue-500/50 from-blue-950 to-blue-800/60 text-blue-300",
+    amber: "border-amber-500/50 from-amber-950 to-orange-900/60 text-amber-300",
+    green: "border-green-500/50 from-green-950 to-emerald-900/60 text-green-300",
+  };
 
   return (
-    <div className="se-page">
-      <div className="se-heading">
-        <div><div className="se-eyebrow">FINANCE / EXPENSES</div><h1>Expenses</h1><p>Track business costs, manage payments, and stay on budget.</p></div>
-        <div className="se-heading-actions">
-          <button className="se-secondary"><CalendarDays size={15}/> This Month <ChevronDown size={14}/></button>
-          <button className="se-primary" onClick={() => setModalOpen(true)}><Plus size={17}/> Add Expense</button>
+    <div className={`flex min-w-0 items-center gap-3 rounded-2xl border bg-gradient-to-br p-4 shadow-lg ${themes[color]}`}>
+      <div className="rounded-xl bg-white/10 p-3">
+        <Icon size={24} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-white/80">{title}</p>
+        <h3 className="mt-1 truncate text-xl font-extrabold text-white">{value}</h3>
+        <p className="mt-1 text-xs font-semibold text-green-400">{change}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function Expenses() {
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All Categories");
+  const [statusFilter, setStatusFilter] = useState("All Status");
+  const [view, setView] = useState("list");
+  const [page, setPage] = useState(1);
+  const [modal, setModal] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [form, setForm] = useState({
+    title: "",
+    category: "office",
+    amount: "",
+    note: "",
+    status: "Paid",
+  });
+
+  const pageSize = 10;
+
+  const fetchExpenses = async () => {
+    try {
+      setLoading(true);
+      const data = await getExpenses();
+      setExpenses(data);
+    } catch (err) {
+      toast.error(err.message || "Failed to load expenses");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExpenses();
+  }, []);
+
+  const filtered = useMemo(
+    () =>
+      expenses.filter((e) => {
+        const q = search.toLowerCase();
+        const matchesQuery =
+          (e.title || "").toLowerCase().includes(q) ||
+          (e.id || "").toLowerCase().includes(q);
+        const matchesCat =
+          categoryFilter === "All Categories" || e.category === categoryFilter;
+        return matchesQuery && matchesCat;
+      }),
+    [expenses, search, categoryFilter]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  const total = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+  const categoryTotals = categories
+    .map((category) => ({
+      category,
+      label: categoryLabels[category],
+      amount: expenses
+        .filter((e) => e.category === category)
+        .reduce((sum, e) => sum + (Number(e.amount) || 0), 0),
+    }))
+    .filter((entry) => entry.amount > 0);
+
+  const addExpense = () => {
+    setSelected(null);
+    setForm({ title: "", category: "office", amount: "", note: "", status: "Paid" });
+    setModal("add");
+  };
+
+  const editExpense = (expense) => {
+    setSelected(expense);
+    setForm({
+      title: expense.title || "",
+      category: expense.category || "office",
+      amount: expense.amount || "",
+      note: expense.note || "",
+      status: "Paid",
+    });
+    setModal("edit");
+  };
+
+  const saveExpense = async (event) => {
+    event.preventDefault();
+    if (!form.title.trim() || Number(form.amount) <= 0) return;
+
+    try {
+      setSaving(true);
+      if (modal === "edit" && selected) {
+        const updated = await updateExpense(selected.id, {
+          title: form.title.trim(),
+          category: form.category,
+          amount: Number(form.amount),
+          note: form.note,
+        });
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === selected.id ? updated : e))
+        );
+        toast.success("Expense updated successfully");
+      } else {
+        const created = await createExpense({
+          title: form.title.trim(),
+          category: form.category,
+          amount: Number(form.amount),
+          note: form.note,
+        });
+        setExpenses((prev) => [created, ...prev]);
+        toast.success("Expense added successfully");
+      }
+      setModal("");
+      setPage(1);
+    } catch (err) {
+      toast.error(err.message || "Failed to save expense");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteExpense = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this expense?")) return;
+    try {
+      await apiDeleteExpense(id);
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
+      toast.success("Expense deleted");
+    } catch (err) {
+      toast.error(err.message || "Failed to delete expense");
+    }
+  };
+
+  const exportCSV = () => {
+    const rows = [
+      ["ID", "Title", "Category", "Amount", "Date", "Created By"],
+      ...filtered.map((e) => [
+        e.id,
+        e.title,
+        categoryLabels[e.category] || e.category,
+        e.amount,
+        new Date(e.date || e.createdAt).toLocaleDateString(),
+        e.createdBy || "System",
+      ]),
+    ];
+
+    const csv = rows
+      .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "StockFlow-Expenses.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const metrics = [
+    { title: "Total Expenses", value: money(total), change: "↗ Live from MongoDB", icon: Wallet, color: "purple" },
+    { title: "Paid Expenses", value: money(total), change: "↗ 100% Cleared", icon: CheckCircle, color: "blue" },
+    { title: "Pending Expenses", value: "₹ 0", change: "None pending", icon: Clock, color: "amber" },
+    { title: "Expense Records", value: expenses.length, change: "Total invoices", icon: FileText, color: "green" },
+  ];
+
+  const pieColors = ["#a855f7", "#2563eb", "#06b6d4", "#10b981", "#f59e0b", "#ec4899"];
+  let cumulative = 0;
+  const gradient = categoryTotals
+    .map((item, index) => {
+      const start = cumulative;
+      cumulative += total ? (item.amount / total) * 100 : 0;
+      return `${pieColors[index % pieColors.length]} ${start}% ${cumulative}%`;
+    })
+    .join(", ");
+
+  return (
+    <div className="w-full min-w-0 space-y-4 text-gray-900 dark:text-white">
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        Dashboard <span className="mx-2 text-purple-500">›</span> Expenses
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-gradient-to-br from-purple-600 to-fuchsia-600 p-3 text-white shadow-lg shadow-purple-500/30">
+            <Wallet size={25} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-extrabold">Expenses</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Track business expenses connected to the live database.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold dark:border-slate-700 dark:bg-slate-900"
+          >
+            <Download size={16} /> Export
+          </button>
+          <button
+            onClick={addExpense}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-purple-500/30 hover:brightness-110"
+          >
+            <Plus size={18} /> Add Expense
+          </button>
         </div>
       </div>
 
-      <div className="se-stats">
-        <div className="se-stat"><div className="se-stat-icon violet"><Wallet size={19}/></div><span>Total Expenses</span><strong>{money(total)}</strong><small className="positive">↗ 5.2% <em>vs. last month</em></small></div>
-        <div className="se-stat"><div className="se-stat-icon green"><CheckCircle2 size={19}/></div><span>Paid Expenses</span><strong>{money(paid)}</strong><small className="positive">Paid successfully</small></div>
-        <div className="se-stat"><div className="se-stat-icon orange"><Clock3 size={19}/></div><span>Due / Pending</span><strong>{money(pending)}</strong><small className="neutral">Needs attention</small></div>
-        <div className="se-stat"><div className="se-stat-icon blue"><Receipt size={19}/></div><span>Expense Records</span><strong>{expenses.length.toString().padStart(2, "0")}</strong><small className="neutral">This month</small></div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((item) => (
+          <Metric key={item.title} {...item} />
+        ))}
       </div>
 
-      <section className="se-card">
-        <div className="se-card-header"><div><h2>Expense Records</h2><p>All expenses across your business</p></div><button className="se-secondary small"><Download size={15}/> Export</button></div>
-        <div className="se-toolbar">
-          <div className="se-search"><Search size={16}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search expense, vendor, category..." /></div>
-          <div className="se-tabs">{["All", "Paid", "Pending", "Overdue"].map((tab) => <button key={tab} className={filter === tab ? "selected" : ""} onClick={() => setFilter(tab)}>{tab}</button>)}</div>
-        </div>
-        <div className="se-table-scroll">
-          <table className="se-table">
-            <thead><tr><th>Expense</th><th>Category</th><th>Vendor</th><th>Amount</th><th>Payment Method</th><th>Status</th><th>Date</th><th></th></tr></thead>
-            <tbody>{filtered.map((expense) => {
-              const Icon = categoryIcon[expense.category] || Wallet;
-              return <tr key={expense.id}>
-                <td><div className="se-expense-title"><span className="se-category-icon"><Icon size={15}/></span><div><strong>{expense.title}</strong><span className="se-sub">{expense.id}</span></div></div></td>
-                <td><span className="se-category-label">{expense.category}</span></td><td>{expense.vendor}</td><td className="se-amount">{money(expense.amount)}</td><td>{expense.method}</td><td><ExpenseStatus status={expense.status}/></td><td>{expense.date}</td><td><button className="se-row-action" title="Expense actions"><MoreHorizontal size={17}/></button></td>
-              </tr>;
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-indigo-900 dark:bg-[#0c1230]">
+          <h3 className="font-extrabold">Expenses by Category</h3>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Live distribution from MongoDB Atlas</p>
+
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-6">
+            <div
+              className="relative h-44 w-44 shrink-0 rounded-full"
+              style={{ background: categoryTotals.length ? `conic-gradient(${gradient})` : "#64748b" }}
+            >
+              <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-white text-center dark:bg-[#101a3b]">
+                <strong className="text-lg">{money(total)}</strong>
+                <span className="text-xs text-gray-500">Total</span>
+              </div>
+            </div>
+
+            <div className="min-w-[190px] flex-1 space-y-3">
+              {categoryTotals.map((item, index) => (
+                <div key={item.category} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <i className="h-3 w-3 rounded-sm" style={{ background: pieColors[index % pieColors.length] }} />
+                    <span>{item.label}</span>
+                  </span>
+                  <strong>{money(item.amount)}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-indigo-900 dark:bg-[#0c1230]">
+          <h3 className="font-extrabold text-gray-900 dark:text-white">Recent Category Breakdown</h3>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Total amounts per category</p>
+
+          <div className="mt-4 space-y-4">
+            {categories.map((cat) => {
+              const catAmount = expenses
+                .filter((e) => e.category === cat)
+                .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+              const pct = total ? Math.round((catAmount / total) * 100) : 0;
+              const Icon = categoryIcon[cat] || Receipt;
+              return (
+                <div key={cat} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <Icon size={16} className="text-purple-500" />
+                      {categoryLabels[cat]}
+                    </span>
+                    <span className="font-bold">{money(catAmount)} ({pct}%)</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-slate-800">
+                    <div
+                      className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
             })}
-            {filtered.length === 0 && <tr><td colSpan="8" className="se-empty">No expenses found.</td></tr>}</tbody>
-          </table>
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-indigo-900 dark:bg-[#0c1230]">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-extrabold">Expense Records</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Permanently saved in database.</p>
+          </div>
+          <button
+            onClick={addExpense}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 px-4 py-2.5 text-sm font-bold text-white"
+          >
+            <Plus size={17} /> Add Expense
+          </button>
         </div>
-        <div className="se-table-footer"><span>Showing {filtered.length} of {expenses.length} expenses</span><div><button disabled>‹</button><button className="current">1</button><button disabled>›</button></div></div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex h-10 min-w-[180px] flex-1 items-center gap-2 rounded-xl border border-gray-300 px-3 dark:border-slate-700 dark:bg-[#080e25]">
+            <Search size={17} className="text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by title or note..."
+              className="w-full bg-transparent text-sm outline-none placeholder:text-gray-400"
+            />
+          </div>
+
+          <select
+            value={categoryFilter}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              setPage(1);
+            }}
+            className="h-10 rounded-xl border border-gray-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-[#080e25]"
+          >
+            <option>All Categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {categoryLabels[c]}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex rounded-xl border border-gray-300 p-1 dark:border-slate-700">
+            <button
+              onClick={() => setView("list")}
+              className={`rounded-lg p-2 ${view === "list" ? "bg-purple-600 text-white" : "text-gray-500"}`}
+            >
+              <List size={17} />
+            </button>
+            <button
+              onClick={() => setView("grid")}
+              className={`rounded-lg p-2 ${view === "grid" ? "bg-purple-600 text-white" : "text-gray-500"}`}
+            >
+              <LayoutGrid size={17} />
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12 text-gray-500">
+            <Loader2 className="animate-spin mr-2" size={24} /> Loading expenses from MongoDB...
+          </div>
+        ) : view === "list" ? (
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600 dark:bg-[#17234b] dark:text-gray-200">
+                <tr>
+                  <th className="px-3 py-3">#</th>
+                  <th className="px-3 py-3">Title</th>
+                  <th className="px-3 py-3">Category</th>
+                  <th className="px-3 py-3">Amount</th>
+                  <th className="px-3 py-3">Date</th>
+                  <th className="px-3 py-3">Logged By</th>
+                  <th className="px-3 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((e, index) => {
+                  const Icon = categoryIcon[e.category] || Receipt;
+                  return (
+                    <tr key={e.id} className="border-t border-gray-100 hover:bg-purple-50/60 dark:border-slate-800 dark:hover:bg-indigo-950/50">
+                      <td className="px-3 py-3 text-gray-500">{(page - 1) * pageSize + index + 1}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-xl bg-purple-100 p-2.5 text-purple-700 dark:bg-purple-600/30 dark:text-purple-300">
+                            <Icon size={19} />
+                          </span>
+                          <div>
+                            <p className="font-bold">{e.title}</p>
+                            {e.note && <p className="text-xs text-gray-500">{e.note}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`rounded-lg px-3 py-1.5 text-xs font-bold ${categoryStyle[e.category] || 'bg-gray-700 text-white'}`}>
+                          {categoryLabels[e.category] || e.category}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 font-bold">{money(e.amount)}</td>
+                      <td className="px-3 py-3 text-gray-500 dark:text-gray-300">
+                        {new Date(e.date || e.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "2-digit",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-3 py-3 text-gray-500 dark:text-gray-400">{e.createdBy || "Admin"}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex gap-2">
+                          <button title="View" onClick={() => { setSelected(e); setModal("view"); }} className="rounded-lg bg-blue-500/15 p-2 text-blue-500"><Eye size={16} /></button>
+                          <button title="Edit" onClick={() => editExpense(e)} className="rounded-lg bg-purple-500/15 p-2 text-purple-500"><Pencil size={16} /></button>
+                          <button title="Delete" onClick={() => handleDeleteExpense(e.id)} className="rounded-lg bg-red-500/15 p-2 text-red-500"><Trash2 size={16} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {visible.length === 0 && (
+                  <tr><td colSpan="7" className="py-10 text-center text-gray-500">No expenses found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {visible.map((e) => {
+              const Icon = categoryIcon[e.category] || Receipt;
+              return (
+                <article key={e.id} className="rounded-xl border border-gray-200 p-4 dark:border-slate-700 dark:bg-[#080e25]">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-xl bg-purple-100 p-3 text-purple-600 dark:bg-purple-600/30 dark:text-purple-300">
+                      <Icon size={22} />
+                    </span>
+                    <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${categoryStyle[e.category] || 'bg-gray-700 text-white'}`}>
+                      {categoryLabels[e.category] || e.category}
+                    </span>
+                  </div>
+                  <h4 className="mt-4 font-bold">{e.title}</h4>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {new Date(e.date || e.createdAt).toLocaleDateString()}
+                  </p>
+                  <strong className="mt-3 block text-xl">{money(e.amount)}</strong>
+                  <div className="mt-4 flex gap-2">
+                    <button onClick={() => { setSelected(e); setModal("view"); }} className="rounded-lg bg-blue-500/15 p-2 text-blue-500"><Eye size={16} /></button>
+                    <button onClick={() => editExpense(e)} className="rounded-lg bg-purple-500/15 p-2 text-purple-500"><Pencil size={16} /></button>
+                    <button onClick={() => handleDeleteExpense(e.id)} className="rounded-lg bg-red-500/15 p-2 text-red-500"><Trash2 size={16} /></button>
+                  </div>
+                </article>
+              );
+            })}
+            {visible.length === 0 && <p className="text-sm text-gray-500">No expenses found.</p>}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-300">
+          <span>
+            Showing {filtered.length ? (page - 1) * pageSize + 1 : 0}
+            {' – '}{Math.min(page * pageSize, filtered.length)}
+            {' of '}{filtered.length} expenses
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="rounded-lg border border-gray-300 p-2 disabled:opacity-30 dark:border-slate-700"
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <span className="rounded-lg bg-purple-600 px-3 py-2 font-bold text-white">{page}</span>
+            <span>of {totalPages}</span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="rounded-lg border border-gray-300 p-2 disabled:opacity-30 dark:border-slate-700"
+            >
+              <ChevronRight size={17} />
+            </button>
+          </div>
+        </div>
       </section>
 
-      {modalOpen && <div className="se-modal-backdrop" onClick={() => setModalOpen(false)}>
-        <form className="se-modal" onSubmit={addExpense} onClick={(e) => e.stopPropagation()}>
-          <div className="se-modal-head"><div><h2>Add New Expense</h2><p>Record a business expense.</p></div><button type="button" className="se-row-action" onClick={() => setModalOpen(false)}><X size={18}/></button></div>
-          <label>Expense title<input required value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} placeholder="e.g. Office supplies"/></label>
-          <label>Category<select value={form.category} onChange={(e) => setForm({...form, category: e.target.value})}><option>Utilities</option><option>Shipping</option><option>Marketing</option><option>Inventory</option><option>Other</option></select></label>
-          <label>Vendor<input required value={form.vendor} onChange={(e) => setForm({...form, vendor: e.target.value})} placeholder="Vendor / company name"/></label>
-          <label>Amount (₹)<input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm({...form, amount: e.target.value})} placeholder="0.00"/></label>
-          <label>Payment status<select value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}><option>Paid</option><option>Pending</option><option>Overdue</option></select></label>
-          <label>Payment method<select value={form.method} onChange={(e) => setForm({...form, method: e.target.value})}><option>Bank Transfer</option><option>UPI</option><option>Card</option><option>Cash</option><option>—</option></select></label>
-          <div className="se-modal-actions"><button type="button" className="se-secondary" onClick={() => setModalOpen(false)}>Cancel</button><button type="submit" className="se-primary"><Plus size={15}/> Save Expense</button></div>
-        </form>
-      </div>}
+      {modal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setModal("")}>
+          <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-purple-500/30 bg-white p-6 shadow-2xl dark:bg-[#101832]" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setModal("")} className="absolute right-4 top-4 rounded-lg bg-gray-100 p-2 dark:bg-slate-800">
+              <X size={17} />
+            </button>
+
+            {modal === "view" ? (
+              <>
+                <h2 className="text-xl font-extrabold">Expense Details</h2>
+                <p className="mt-1 text-sm text-gray-500">Transaction information</p>
+                <div className="mt-6 space-y-4">
+                  {[
+                    ["Title", selected?.title],
+                    ["Category", categoryLabels[selected?.category] || selected?.category],
+                    ["Amount", money(selected?.amount || 0)],
+                    ["Date", new Date(selected?.date || selected?.createdAt).toLocaleDateString()],
+                    ["Note", selected?.note || "-"],
+                    ["Created By", selected?.createdBy || "Admin"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-3 border-b border-gray-200 pb-3 text-sm dark:border-slate-700">
+                      <span className="text-gray-500">{label}</span>
+                      <strong className="text-right">{value}</strong>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-extrabold">{modal === "edit" ? "Edit Expense" : "Add New Expense"}</h2>
+                <p className="mb-5 mt-1 text-sm text-gray-500">Persists directly to MongoDB Atlas.</p>
+                <form onSubmit={saveExpense} className="space-y-4">
+                  <label className="block text-sm font-semibold">
+                    Expense Title
+                    <input
+                      required
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      placeholder="e.g. Office electricity bill"
+                      className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 outline-none focus:border-purple-500 dark:border-slate-700 dark:bg-[#080e25]"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold">
+                    Category
+                    <select
+                      value={form.category}
+                      onChange={(e) => setForm({ ...form, category: e.target.value })}
+                      className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 dark:border-slate-700 dark:bg-[#080e25]"
+                    >
+                      {categories.map((c) => (
+                        <option key={c} value={c}>
+                          {categoryLabels[c]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-semibold">
+                    Amount (₹)
+                    <input
+                      required
+                      min="1"
+                      type="number"
+                      value={form.amount}
+                      onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                      placeholder="Enter amount"
+                      className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 dark:border-slate-700 dark:bg-[#080e25]"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold">
+                    Note (Optional)
+                    <input
+                      value={form.note}
+                      onChange={(e) => setForm({ ...form, note: e.target.value })}
+                      placeholder="Optional notes or reference number"
+                      className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 dark:border-slate-700 dark:bg-[#080e25]"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="w-full rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 py-3 font-bold text-white shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : modal === "edit" ? "Save Changes" : "Add Expense"}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

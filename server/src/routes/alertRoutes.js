@@ -10,7 +10,7 @@ router.use(protect); // every logged-in role can see and read alerts
 
 router.get('/', listAlerts);
 router.get('/unread-count', unreadCount);
-router.patch('/read-all', markAllRead);
+router.patch('/read-all', markAllRead); // must stay above /:id/read
 router.patch('/:id/read', [param('id').isMongoId().withMessage('Invalid alert id')], validate, markRead);
 
 export default router;

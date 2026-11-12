@@ -28,12 +28,6 @@ export const unreadCount = asyncHandler(async (req, res) => {
   res.json({ count });
 });
 
-// PATCH /api/alerts/read-all      { updated }
-export const markAllRead = asyncHandler(async (req, res) => {
-  const result = await Alert.updateMany({ isRead: false }, { isRead: true });
-  res.json({ updated: result.modifiedCount });
-});
-
 // PATCH /api/alerts/:id/read
 export const markRead = asyncHandler(async (req, res) => {
   const alert = await Alert.findByIdAndUpdate(req.params.id, { isRead: true }, { returnDocument: 'after' }).populate(
@@ -42,4 +36,10 @@ export const markRead = asyncHandler(async (req, res) => {
   );
   if (!alert) throw new ApiError(404, 'Alert not found');
   res.json(alert);
+});
+
+// PATCH /api/alerts/read-all      { updated }
+export const markAllRead = asyncHandler(async (req, res) => {
+  const result = await Alert.updateMany({ isRead: false }, { isRead: true });
+  res.json({ updated: result.modifiedCount });
 });

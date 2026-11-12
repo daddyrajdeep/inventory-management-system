@@ -9,3 +9,4 @@ export { default as Sale } from './Sale.js';
 export { default as Expense } from './Expense.js';
 export { default as AuditLog } from './AuditLog.js';
 export { default as Alert } from './Alert.js';
+export { default as Counter } from './Counter.js';

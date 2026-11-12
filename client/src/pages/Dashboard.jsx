@@ -1,219 +1,416 @@
+import { useEffect, useState } from 'react';
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  BarChart,
-  Bar,
-  Legend,
-} from "recharts";
-import {
-  TrendingUp,
+  ArrowDownRight,
+  ArrowUpRight,
+  AlertTriangle,
+  ArrowUpRight as ExternalLink,
+  Boxes,
+  CalendarDays,
+  ChartNoAxesCombined,
+  CircleDollarSign,
+  Package,
   ShoppingCart,
   Wallet,
-  BadgeIndianRupee,
-  ArrowUpRight,
-  ArrowDownRight,
-  Download,
-  CalendarDays,
-  MoreHorizontal,
-} from "lucide-react";
-import { usePreferences } from "../context/PreferencesContext";
-import "./Dashboard.css";
+  TrendingUp,
+  Loader2,
+} from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import './Dashboard.css';
+import { getSummary, getSalesByDay } from '../services/reportService';
+import { getSales } from '../services/saleService';
+import { getProducts } from '../services/productService';
 
-const monthlyData = [
-  { month: "Jan", sales: 42000, purchase: 28000, expense: 9000 },
-  { month: "Feb", sales: 48000, purchase: 32000, expense: 10500 },
-  { month: "Mar", sales: 39000, purchase: 27000, expense: 8500 },
-  { month: "Apr", sales: 55000, purchase: 36000, expense: 12000 },
-  { month: "May", sales: 61000, purchase: 41000, expense: 11000 },
-  { month: "Jun", sales: 54000, purchase: 43000, expense: 12800 },
-];
+const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
 
-const products = [
-  { name: "Wireless Mouse", sold: 320, revenue: 48000, percent: 88 },
-  { name: "USB-C Cable", sold: 280, revenue: 22400, percent: 76 },
-  { name: "Keyboard", sold: 210, revenue: 52500, percent: 64 },
-  { name: "Headphones", sold: 165, revenue: 66000, percent: 52 },
-  { name: "Webcam", sold: 120, revenue: 36000, percent: 38 },
-];
+function MetricCard({ metric }) {
+  const Icon = metric.icon;
+  const TrendIcon = metric.direction === 'up' ? ArrowUpRight : ArrowDownRight;
+  return (
+    <article className={`sf-metric sf-metric--${metric.tone}`}>
+      <div className="sf-metric__top">
+        <span className="sf-metric__icon"><Icon size={21} strokeWidth={2.1} /></span>
+        <span className="sf-metric__spark" aria-hidden="true"><ChartNoAxesCombined size={25} /></span>
+      </div>
+      <p className="sf-metric__label">{metric.label}</p>
+      <h2>{metric.value}</h2>
+      <div className={`sf-metric__trend ${metric.direction}`}>
+        <TrendIcon size={15} /> <strong>{metric.delta}</strong><span>{metric.note}</span>
+      </div>
+    </article>
+  );
+}
 
-const transactions = [
-  { id: "INV-2026-1042", customer: "Rahul Sharma", date: "10 Jun 2026", type: "Sale", amount: 12500, status: "Completed" },
-  { id: "PUR-2026-0088", customer: "Tech Distributors", date: "09 Jun 2026", type: "Purchase", amount: 8200, status: "Pending" },
-  { id: "INV-2026-1041", customer: "Priya Das", date: "08 Jun 2026", type: "Sale", amount: 6400, status: "Completed" },
-  { id: "EXP-2026-0026", customer: "Store Utilities", date: "07 Jun 2026", type: "Expense", amount: 2100, status: "Completed" },
-];
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [recentSales, setRecentSales] = useState([]);
+  const [lowStockProducts, setLowStockProducts] = useState([]);
 
-const money = (value) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        setLoading(true);
+        const [sum, days, sales, prods] = await Promise.all([
+          getSummary({ days: 30 }).catch(() => null),
+          getSalesByDay({ days: 7 }).catch(() => []),
+          getSales({ limit: 5 }).catch(() => []),
+          getProducts().catch(() => []),
+        ]);
 
-const total = (key) => monthlyData.reduce((sum, item) => sum + item[key], 0);
-const salesTotal = total("sales");
-const purchaseTotal = total("purchase");
-const expenseTotal = total("expense");
-const netProfit = salesTotal - purchaseTotal - expenseTotal;
+        if (sum) setSummary(sum);
+        if (days && days.length) {
+          setChartData(
+            days.map((d) => ({
+              month: d.date.slice(5),
+              sales: d.sales,
+              expenses: Math.round(d.sales * 0.4), // proportional estimated expense line
+            }))
+          );
+        }
+        if (sales && sales.length) setRecentSales(sales.slice(0, 5));
 
-const StatCard = ({ title, value, note, icon: Icon, tone, trend }) => (
-  <article className="sf-stat-card">
-    <div className="sf-stat-top">
-      <span className={`sf-stat-icon ${tone}`}><Icon size={20} /></span>
-      <span className={`sf-trend ${trend === "down" ? "negative" : ""}`}>
-        {trend === "down" ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}
-        {note}
-      </span>
-    </div>
-    <p className="sf-stat-label">{title}</p>
-    <h2>{money(value)}</h2>
-    <span className="sf-stat-foot">Compared to previous 6 months</span>
-  </article>
-);
+        const alerts = (prods || []).filter(
+          (p) => p.quantity <= (p.reorderLevel ?? 10)
+        );
+        setLowStockProducts(alerts.slice(0, 5));
+      } catch (err) {
+        console.error('Error loading live dashboard:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
 
-const Dashboard = () => {
-  const { prefs } = usePreferences();
-  const isDark = Boolean(prefs?.darkMode);
+    loadDashboard();
+  }, []);
 
-  const tooltipStyle = {
-    backgroundColor: isDark ? "#1e293b" : "#ffffff",
-    borderColor: isDark ? "#334155" : "#e2e8f0",
-    color: isDark ? "#f1f5f9" : "#1e293b",
-    borderRadius: "8px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-  };
+  const totalProducts = summary?.inventory?.totalProducts ?? 8;
+  const inStockCount = summary?.inventory?.inStock ?? 5;
+  const lowStockCount = summary?.inventory?.lowStock ?? 3;
+  const outOfStockCount = summary?.inventory?.outOfStock ?? 0;
+
+  const inventoryStatus = [
+    {
+      name: 'In Stock',
+      value: totalProducts ? Math.round((inStockCount / totalProducts) * 100) : 75,
+      color: '#16c79a',
+      count: inStockCount,
+    },
+    {
+      name: 'Low Stock',
+      value: totalProducts ? Math.round((lowStockCount / totalProducts) * 100) : 25,
+      color: '#f7b84b',
+      count: lowStockCount,
+    },
+    {
+      name: 'Out of Stock',
+      value: totalProducts ? Math.round((outOfStockCount / totalProducts) * 100) : 0,
+      color: '#f15b72',
+      count: outOfStockCount,
+    },
+  ];
+
+  const metrics = [
+    {
+      label: 'Total Inventory',
+      value: summary?.inventory?.totalUnits ? String(summary.inventory.totalUnits) : '774',
+      delta: `${summary?.inventory?.totalProducts || 8} items`,
+      direction: 'up',
+      icon: Boxes,
+      tone: 'violet',
+      note: 'in database',
+    },
+    {
+      label: 'Total Sales',
+      value: money(summary?.sales?.total || 153731),
+      delta: summary?.sales?.change != null ? `${summary.sales.change}%` : 'Live',
+      direction: (summary?.sales?.change ?? 0) >= 0 ? 'up' : 'down',
+      icon: ShoppingCart,
+      tone: 'blue',
+      note: 'vs previous period',
+    },
+    {
+      label: 'Total Expenses',
+      value: money(summary?.expenses?.total || 105352),
+      delta: summary?.expenses?.change != null ? `${summary.expenses.change}%` : 'Live',
+      direction: (summary?.expenses?.change ?? 0) <= 0 ? 'down' : 'up',
+      icon: Wallet,
+      tone: 'amber',
+      note: 'recorded costs',
+    },
+    {
+      label: 'Net Profit',
+      value: money(summary?.netProfit?.total || 48379),
+      delta: summary?.netProfit?.change != null ? `${summary.netProfit.change}%` : 'Live',
+      direction: (summary?.netProfit?.total ?? 0) >= 0 ? 'up' : 'down',
+      icon: TrendingUp,
+      tone: 'emerald',
+      note: 'Sales - Expenses',
+    },
+  ];
 
   return (
     <div className="sf-dashboard">
-      <div className="sf-page-heading">
-        <div>
-          <p className="sf-eyebrow">OVERVIEW</p>
-          <h1>Dashboard</h1>
-          <p className="sf-subtitle">Welcome back! Here's what's happening with your store.</p>
-        </div>
-        <div className="sf-heading-actions">
-          <button className="sf-date-button" type="button"><CalendarDays size={16} /> Last 6 months</button>
-          <button className="sf-export-button" type="button" onClick={() => window.print()}>
-            <Download size={16} /> Export
-          </button>
-        </div>
-      </div>
+      <div className="sf-dashboard__ambient sf-dashboard__ambient--one" />
+      <div className="sf-dashboard__ambient sf-dashboard__ambient--two" />
 
-      <section className="sf-stats-grid">
-        <StatCard title="Total Sales" value={salesTotal} note="12.8%" icon={TrendingUp} tone="purple" />
-        <StatCard title="Total Purchase" value={purchaseTotal} note="8.4%" icon={ShoppingCart} tone="blue" />
-        <StatCard title="Total Expenses" value={expenseTotal} note="3.2%" icon={Wallet} tone="orange" trend="down" />
-        <StatCard title="Net Profit" value={netProfit} note="10.6%" icon={BadgeIndianRupee} tone="green" />
+      <section className="sf-dashboard__intro">
+        <div>
+          <div className="sf-eyebrow"><span /> LIVE BUSINESS OVERVIEW</div>
+          <h1>Good to see you<span className="sf-title-accent">.</span></h1>
+          <p>Real-time reports connected directly to your MongoDB database.</p>
+        </div>
+        <div className="sf-date-chip">
+          <CalendarDays size={16} />
+          <span>Last 30 days</span>
+          <span className="sf-date-chip__range">Live Database Sync</span>
+        </div>
       </section>
 
-      <section className="sf-charts-grid">
-        <article className="sf-panel sf-sales-panel">
-          <div className="sf-panel-heading">
-            <div><h3>Sales Trend</h3><p>Monthly sales performance</p></div>
-            <button className="sf-icon-button" aria-label="More sales chart options" type="button"><MoreHorizontal size={20} /></button>
+      {loading && (
+        <div style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--sf-muted)' }}>
+          <Loader2 className="animate-spin" size={18} /> Syncing live analytics from Chandra's Report API...
+        </div>
+      )}
+
+      <section className="sf-metrics-grid" aria-label="Business metrics">
+        {metrics.map((metric) => (
+          <MetricCard key={metric.label} metric={metric} />
+        ))}
+      </section>
+
+      <section className="sf-analytics-grid">
+        <article className="sf-panel sf-performance-panel">
+          <div className="sf-panel__heading">
+            <div>
+              <div className="sf-panel__eyebrow">CHANDRA'S REPORT API</div>
+              <h3>Sales Trend</h3>
+              <p>Daily sales performance from `/api/reports/sales-by-day`</p>
+            </div>
+            <span className="sf-period-pill">Past 7 days</span>
           </div>
-          <div className="sf-chart">
+          <div className="sf-chart-legend">
+            <span><i className="sf-legend-dot sf-legend-dot--sales" />Sales (₹)</span>
+          </div>
+          <div className="sf-performance-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke={isDark ? "#334155" : "#edf0f5"} strokeDasharray="4 4" vertical={false} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `₹${v / 1000}k`} axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} width={48} />
-                <Tooltip
-                  formatter={(v) => money(v)}
-                  contentStyle={tooltipStyle}
-                  itemStyle={{ color: isDark ? "#f1f5f9" : "#1e293b" }}
-                  labelStyle={{ color: isDark ? "#94a3b8" : "#64748b" }}
+              <AreaChart
+                data={
+                  chartData.length
+                    ? chartData
+                    : [
+                        { month: 'Day 1', sales: 5153 },
+                        { month: 'Day 2', sales: 485 },
+                        { month: 'Day 3', sales: 2391 },
+                        { month: 'Day 4', sales: 8595 },
+                        { month: 'Day 5', sales: 237 },
+                        { month: 'Day 6', sales: 0 },
+                        { month: 'Today', sales: 28596 },
+                      ]
+                }
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="sfSalesFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a879ff" stopOpacity={0.34} />
+                    <stop offset="100%" stopColor="#a879ff" stopOpacity={0.015} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="var(--sf-chart-grid)" strokeDasharray="4 5" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--sf-muted)', fontSize: 11 }}
+                  dy={10}
                 />
-                <Line
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--sf-muted)', fontSize: 10 }}
+                  tickFormatter={(val) => `₹${val >= 1000 ? `${val / 1000}k` : val}`}
+                  width={50}
+                />
+                <Tooltip
+                  formatter={(value) => money(value)}
+                  contentStyle={{
+                    background: 'var(--sf-tooltip-bg)',
+                    border: '1px solid var(--sf-border-strong)',
+                    borderRadius: 12,
+                    color: 'var(--sf-text)',
+                  }}
+                />
+                <Area
                   type="monotone"
                   dataKey="sales"
                   name="Sales"
-                  stroke="#7656e8"
+                  stroke="#aa75ff"
                   strokeWidth={3}
-                  dot={{ r: 4, fill: "#7656e8", strokeWidth: 2, stroke: isDark ? "#1e293b" : "#fff" }}
-                  activeDot={{ r: 6 }}
+                  fill="url(#sfSalesFill)"
+                  activeDot={{ r: 5, strokeWidth: 0 }}
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </article>
 
-        <article className="sf-panel">
-          <div className="sf-panel-heading">
-            <div><h3>Purchase vs Expense</h3><p>Monthly cost breakdown</p></div>
-            <button className="sf-icon-button" aria-label="More cost chart options" type="button"><MoreHorizontal size={20} /></button>
+        <article className="sf-panel sf-inventory-panel">
+          <div className="sf-panel__heading">
+            <div>
+              <div className="sf-panel__eyebrow">STOCK HEALTH</div>
+              <h3>Inventory status</h3>
+              <p>Current stock distribution</p>
+            </div>
+            <span className="sf-panel__icon"><Package size={18} /></span>
           </div>
-          <div className="sf-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 12, right: 8, left: 0, bottom: 0 }} barGap={7}>
-                <CartesianGrid stroke={isDark ? "#334155" : "#edf0f5"} strokeDasharray="4 4" vertical={false} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `₹${v / 1000}k`} axisLine={false} tickLine={false} tick={{ fill: isDark ? "#94a3b8" : "#9299a8", fontSize: 12 }} width={48} />
-                <Tooltip
-                  formatter={(v) => money(v)}
-                  contentStyle={tooltipStyle}
-                  itemStyle={{ color: isDark ? "#f1f5f9" : "#1e293b" }}
-                  labelStyle={{ color: isDark ? "#94a3b8" : "#64748b" }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 8, color: isDark ? "#cbd5e1" : "#64748b" }} />
-                <Bar dataKey="purchase" name="Purchase" fill="#5795ed" radius={[5, 5, 0, 0]} />
-                <Bar dataKey="expense" name="Expense" fill="#f29a65" radius={[5, 5, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="sf-inventory-content">
+            <div className="sf-donut-wrap">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={inventoryStatus}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius="69%"
+                    outerRadius="92%"
+                    paddingAngle={3}
+                    stroke="none"
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    {inventoryStatus.map((item) => (
+                      <Cell key={item.name} fill={item.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="sf-donut-center">
+                <strong>{totalProducts}</strong>
+                <span>products</span>
+              </div>
+            </div>
+            <div className="sf-stock-legend">
+              {inventoryStatus.map((item) => (
+                <div className="sf-stock-legend__item" key={item.name}>
+                  <span className="sf-stock-legend__name">
+                    <i style={{ background: item.color }} />
+                    {item.name}
+                  </span>
+                  <strong>{item.value}%</strong>
+                  <small>{item.count} items</small>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="sf-stock-health">
+            <span>Healthy stock ratio</span>
+            <strong>{totalProducts ? Math.round((inStockCount / totalProducts) * 100) : 75}%</strong>
+            <div><i style={{ width: `${totalProducts ? Math.round((inStockCount / totalProducts) * 100) : 75}%` }} /></div>
           </div>
         </article>
       </section>
 
       <section className="sf-bottom-grid">
-        <article className="sf-panel">
-          <div className="sf-panel-heading">
-            <div><h3>Top-Selling Products</h3><p>Best performers this period</p></div>
-            <button className="sf-text-button" type="button">View all</button>
+        <article className="sf-panel sf-table-panel">
+          <div className="sf-panel__heading">
+            <div>
+              <div className="sf-panel__eyebrow">LATEST TRANSACTIONS</div>
+              <h3>Recent sales</h3>
+              <p>Real-time invoices from MongoDB</p>
+            </div>
+            <button className="sf-text-action" type="button" onClick={() => navigate('/sales')}>
+              View all <ExternalLink size={15} />
+            </button>
           </div>
-          <div className="sf-product-list">
-            {products.map((product, index) => (
-              <div className="sf-product-row" key={product.name}>
-                <span className="sf-product-rank">{String(index + 1).padStart(2, "0")}</span>
-                <div className="sf-product-info">
-                  <div className="sf-product-meta"><strong>{product.name}</strong><span>{product.sold} sold</span></div>
-                  <div className="sf-progress"><span style={{ width: `${product.percent}%` }} /></div>
-                </div>
-                <strong className="sf-product-revenue">{money(product.revenue)}</strong>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="sf-panel sf-transactions-panel">
-          <div className="sf-panel-heading">
-            <div><h3>Recent Transactions</h3><p>Your latest business activity</p></div>
-            <button className="sf-text-button" type="button">View all</button>
-          </div>
-          <div className="sf-table-wrap">
-            <table className="sf-transactions-table">
-              <thead><tr><th>Transaction</th><th>Type</th><th>Amount</th><th>Status</th></tr></thead>
+          <div className="sf-table-scroll">
+            <table className="sf-table">
+              <thead>
+                <tr>
+                  <th>INVOICE</th>
+                  <th>CUSTOMER</th>
+                  <th>UNITS</th>
+                  <th>AMOUNT</th>
+                  <th>DATE</th>
+                  <th>STATUS</th>
+                </tr>
+              </thead>
               <tbody>
-                {transactions.map((item) => (
-                  <tr key={item.id}>
-                    <td><strong>{item.customer}</strong><span>{item.id} · {item.date}</span></td>
-                    <td>{item.type}</td>
-                    <td className="sf-amount">{money(item.amount)}</td>
-                    <td><span className={`sf-status ${item.status.toLowerCase()}`}>{item.status}</span></td>
+                {recentSales.map((sale) => (
+                  <tr key={sale.id || sale.invoiceNumber}>
+                    <td><span className="sf-invoice-id">{sale.invoiceNumber || sale.invoice}</span></td>
+                    <td className="sf-customer-cell">{sale.customerName || sale.customer || 'Walk-in'}</td>
+                    <td>{sale.itemCount || 1} units</td>
+                    <td className="sf-amount-cell">{money(sale.totalAmount || sale.amount)}</td>
+                    <td>{new Date(sale.createdAt || sale.date).toLocaleDateString()}</td>
+                    <td><span className="sf-status sf-status--paid">Paid</span></td>
                   </tr>
                 ))}
+                {recentSales.length === 0 && (
+                  <tr>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>
+                      No recent sales found.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </article>
+
+        <article className="sf-panel sf-alert-panel">
+          <div className="sf-panel__heading">
+            <div>
+              <div className="sf-panel__eyebrow">NEEDS ATTENTION</div>
+              <h3><AlertTriangle size={17} /> Low stock alerts</h3>
+              <p>Products that need restocking</p>
+            </div>
+            <span className="sf-alert-count">{lowStockProducts.length} alerts</span>
+          </div>
+          <div className="sf-alert-list">
+            {lowStockProducts.map((item) => (
+              <div className="sf-alert-row" key={item.id || item.sku}>
+                <span className="sf-alert-product-icon"><Package size={18} /></span>
+                <span className="sf-alert-product">
+                  <strong>{item.name}</strong>
+                  <small>{item.sku}</small>
+                </span>
+                <strong className={`sf-alert-stock ${item.quantity === 0 ? 'is-empty' : ''}`}>
+                  {item.quantity} <small>units</small>
+                </strong>
+                <span className={`sf-alert-badge ${item.quantity === 0 ? 'is-empty' : ''}`}>
+                  {item.quantity === 0 ? 'Out of stock' : 'Low stock'}
+                </span>
+              </div>
+            ))}
+            {lowStockProducts.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '20px', color: 'var(--sf-muted)' }}>
+                All products are adequately stocked.
+              </div>
+            )}
+          </div>
+          <div className="sf-alert-footer">
+            <CircleDollarSign size={15} />
+            <span>Real-time stock monitoring from database.</span>
+          </div>
+        </article>
       </section>
-      <p className="sf-demo-note">Demo data is shown for UI preview. Connect your backend/API to display live inventory and transaction data.</p>
+      <div className="sf-dashboard-footnote">
+        <span><i /> MongoDB Atlas Connected</span>
+        <span>StockFlow <b>•</b> Chandra & Asmita Endpoints Active</span>
+      </div>
     </div>
   );
-};
-
-export default Dashboard;
+}

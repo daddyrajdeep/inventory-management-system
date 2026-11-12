@@ -1,8 +1,19 @@
-import { sales } from '../data/sales';
-import { delay } from '../utils/delay';
+import api from './api';
 
-// Backend phase: await api.get('/sales')
-export async function getSales() {
-  await delay();
-  return sales;
+// GET /api/sales?from=&to=&paymentMethod=&search=&limit=
+export async function getSales(params) {
+  const { data } = await api.get('/sales', { params });
+  return data;
+}
+
+// GET /api/sales/:id
+export async function getSaleById(id) {
+  const { data } = await api.get(`/sales/${id}`);
+  return data;
+}
+
+// POST /api/sales   body: { items: [{ product, quantity }], discount, customerName, paymentMethod }
+export async function createSale(payload) {
+  const { data } = await api.post('/sales', payload);
+  return data;
 }

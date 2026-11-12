@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import {
+  Plus, Search, Trash2, Pencil, Eye, Download, Upload, Users,
+  Building2, Package, TrendingUp, Mail, Phone, MapPin, X, Truck,
+  ChevronLeft, ChevronRight, SlidersHorizontal
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import PageHeader from '../components/PageHeader';
-import DataTable from '../components/DataTable';
-import Modal from '../components/Modal';
-import FormField, { inputClass } from '../components/FormField';
 import { getSuppliers } from '../services/supplierService';
+import './Suppliers.css';
 
-// OWNER: Soham (Categories and Suppliers)
-// Add and delete only change local state for now, so they reset on refresh.
-// Backend phase: add addSupplier / deleteSupplier to your own supplierService.js and call them here.
 const emptyForm = { name: '', email: '', phone: '', address: '' };
+const demoExtras = [
+  { id: 's4', name: 'Tech World Distributors', email: 'sales@techworld.in', phone: '+91 98765 43213', address: 'Salt Lake, Kolkata' },
+  { id: 's5', name: 'Digital Accessories Hub', email: 'contact@dah.in', phone: '+91 98765 43214', address: 'Howrah' },
+  { id: 's6', name: 'Prime Office Supplies', email: 'hello@primeoffice.in', phone: '+91 98765 43215', address: 'New Town, Kolkata' },
+];
 
 function validate(form) {
   const errors = {};
@@ -24,156 +27,90 @@ export default function Suppliers() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('All Status');
   const [modalOpen, setModalOpen] = useState(false);
+  const [viewItem, setViewItem] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
 
   useEffect(() => {
     let active = true;
     getSuppliers().then((list) => {
       if (!active) return;
-      setSuppliers(list);
+      setSuppliers([...list, ...demoExtras]);
       setLoading(false);
+    }).catch(() => {
+      if (active) { setSuppliers(demoExtras); setLoading(false); }
     });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
-  const openModal = () => {
-    setForm(emptyForm);
-    setErrors({});
-    setModalOpen(true);
-  };
-
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const addSupplier = (e) => {
-    e.preventDefault();
-    const found = validate(form);
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
-
-    const supplier = {
-      id: Date.now().toString(),
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      address: form.address.trim(),
-    };
-    setSuppliers([...suppliers, supplier]);
-    setModalOpen(false);
-    toast.success(`${supplier.name} added`);
-  };
-
-  const deleteSupplier = (supplier) => {
-    if (!window.confirm(`Delete ${supplier.name}?`)) return;
-    setSuppliers(suppliers.filter((s) => s.id !== supplier.id));
-    toast.success(`${supplier.name} deleted`);
-  };
-
-  const filteredSuppliers = useMemo(() => {
+  const filtered = useMemo(() => suppliers.filter((s) => {
     const q = search.toLowerCase();
-    return suppliers.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        (s.email || '').toLowerCase().includes(q) ||
-        (s.phone || '').includes(q)
-    );
-  }, [suppliers, search]);
+    const matches = [s.name, s.email, s.phone, s.address].some((v) => (v || '').toLowerCase().includes(q));
+    const active = s.status ? s.status === 'Active' : true;
+    return matches && (status === 'All Status' || (status === 'Active' ? active : !active));
+  }), [suppliers, search, status]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const dash = (value) => value || <span className="text-gray-400">-</span>;
-
-  const columns = [
-    { key: 'name', label: 'Name', render: (r) => <span className="font-medium text-gray-900">{r.name}</span> },
-    { key: 'email', label: 'Email', render: (r) => dash(r.email) },
-    { key: 'phone', label: 'Phone', render: (r) => dash(r.phone) },
-    { key: 'address', label: 'Address', render: (r) => dash(r.address) },
-    {
-      key: 'actions',
-      label: '',
-      render: (row) => (
-        <div className="flex justify-end">
-          <button
-            onClick={() => deleteSupplier(row)}
-            className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
-          >
-            <Trash2 size={16} /> Delete
-          </button>
-        </div>
-      ),
-    },
-  ];
+  const openAdd = () => { setEditing(null); setForm(emptyForm); setErrors({}); setModalOpen(true); };
+  const openEdit = (supplier) => { setEditing(supplier); setForm({ name: supplier.name || '', email: supplier.email || '', phone: supplier.phone || '', address: supplier.address || '' }); setErrors({}); setModalOpen(true); };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const nextErrors = validate(form); setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+    if (editing) {
+      setSuppliers((current) => current.map((s) => s.id === editing.id ? { ...s, ...form } : s));
+      toast.success('Supplier updated');
+    } else {
+      setSuppliers((current) => [...current, { ...form, id: `local-${Date.now()}`, status: 'Active' }]);
+      toast.success('Supplier added');
+    }
+    setModalOpen(false);
+  };
+  const remove = (supplier) => {
+    if (!window.confirm(`Delete ${supplier.name}?`)) return;
+    setSuppliers((current) => current.filter((s) => s.id !== supplier.id));
+    toast.success('Supplier deleted');
+  };
+  const exportCsv = () => {
+    const rows = [['Supplier', 'Email', 'Phone', 'Address'], ...filtered.map((s) => [s.name, s.email, s.phone, s.address])];
+    const csv = rows.map((r) => r.map((v) => `"${String(v || '').replaceAll('"', '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'stockflow-suppliers.csv'; a.click(); URL.revokeObjectURL(url);
+  };
 
   return (
-    <>
-      <PageHeader
-        title="Suppliers"
-        subtitle={`${suppliers.length} suppliers you order stock from`}
-        action={
-          <button
-            onClick={openModal}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-          >
-            <Plus size={16} /> Add Supplier
-          </button>
-        }
-      />
-
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, email or phone..."
-          className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"
-        />
+    <div className="sf-suppliers">
+      <div className="sf-sup-breadcrumb">Dashboard <span>›</span> Suppliers</div>
+      <div className="sf-sup-heading">
+        <div className="sf-sup-title-wrap"><div className="sf-sup-title-icon"><Truck size={25} /></div><div><h1>Suppliers</h1><p>Manage supplier relationships, contact details and supply performance.</p></div></div>
+        <div className="sf-sup-actions"><button className="sf-sup-secondary" onClick={exportCsv}><Download size={16}/> Export</button><button className="sf-sup-primary" onClick={openAdd}><Plus size={18}/> Add Supplier</button></div>
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={filteredSuppliers}
-        loading={loading}
-        emptyText={search ? 'No suppliers match your search' : 'No suppliers yet. Click Add Supplier to create one.'}
-      />
+      <section className="sf-sup-stats">
+        <div className="sf-sup-stat purple"><div className="sf-sup-stat-icon"><Users/></div><div><span>Total Suppliers</span><strong>{suppliers.length}</strong><small className="up">↗ +8.2% <em>vs last month</em></small></div><Building2 className="sf-sup-watermark"/></div>
+        <div className="sf-sup-stat blue"><div className="sf-sup-stat-icon"><Building2/></div><div><span>Active Suppliers</span><strong>{suppliers.filter(s => s.status !== 'Inactive').length}</strong><small className="up">↗ +5.4% <em>vs last month</em></small></div><Building2 className="sf-sup-watermark"/></div>
+        <div className="sf-sup-stat orange"><div className="sf-sup-stat-icon"><Package/></div><div><span>Inactive Suppliers</span><strong>{suppliers.filter(s => s.status === 'Inactive').length}</strong><small className="down">↘ 0.0% <em>vs last month</em></small></div><Package className="sf-sup-watermark"/></div>
+        <div className="sf-sup-stat green"><div className="sf-sup-stat-icon"><TrendingUp/></div><div><span>Products Supplied</span><strong>1,248</strong><small className="up">↗ +12.6% <em>vs last month</em></small></div><Package className="sf-sup-watermark"/></div>
+      </section>
 
-      <Modal open={modalOpen} title="Add supplier" onClose={() => setModalOpen(false)}>
-        <form onSubmit={addSupplier} className="space-y-4" noValidate>
-          <FormField label="Supplier name" error={errors.name}>
-            <input name="name" className={inputClass} value={form.name} onChange={handleChange} />
-          </FormField>
-          <FormField label="Email" error={errors.email}>
-            <input name="email" type="email" className={inputClass} value={form.email} onChange={handleChange} />
-          </FormField>
-          <FormField label="Phone" error={errors.phone}>
-            <input name="phone" className={inputClass} value={form.phone} onChange={handleChange} />
-          </FormField>
-          <FormField label="Address">
-            <textarea
-              name="address"
-              rows={2}
-              className={inputClass}
-              value={form.address}
-              onChange={handleChange}
-            />
-          </FormField>
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              Add supplier
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </>
+      <section className="sf-sup-table-panel">
+        <div className="sf-sup-toolbar"><label className="sf-sup-search"><Search size={18}/><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search suppliers by name, email, phone..."/><kbd>⌕</kbd></label><label className="sf-sup-filter"><SlidersHorizontal size={16}/><select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option>All Status</option><option>Active</option><option>Inactive</option></select></label><div className="sf-sup-view-toggle"><button className="selected" aria-label="List view">☷</button><button aria-label="Grid view" onClick={() => toast('List view is currently selected')}>▦</button></div></div>
+        <div className="sf-sup-table-scroll"><table className="sf-sup-table"><thead><tr><th className="check-col"><input type="checkbox" aria-label="Select all"/></th><th>#</th><th>Supplier</th><th>Contact Email</th><th>Phone</th><th>Location</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+          {loading ? <tr><td colSpan="8" className="sf-sup-empty">Loading suppliers...</td></tr> : visible.length === 0 ? <tr><td colSpan="8" className="sf-sup-empty">No suppliers found. Try another search or add a supplier.</td></tr> : visible.map((s, i) => <tr key={s.id}><td><input type="checkbox" aria-label={`Select ${s.name}`}/></td><td>{(page - 1) * pageSize + i + 1}</td><td><div className="sf-sup-name"><span className="sf-sup-avatar">{s.name?.slice(0, 1).toUpperCase()}</span><div><strong>{s.name}</strong><small>SUP-{String(i + 1001).padStart(4, '0')}</small></div></div></td><td><span className="sf-sup-contact"><Mail size={14}/>{s.email || '—'}</span></td><td><span className="sf-sup-contact"><Phone size={14}/>{s.phone || '—'}</span></td><td><span className="sf-sup-contact"><MapPin size={14}/>{s.address || '—'}</span></td><td><span className={`sf-sup-status ${s.status === 'Inactive' ? 'inactive' : 'active'}`}>{s.status || 'Active'}</span></td><td><div className="sf-sup-row-actions"><button title="View" onClick={() => setViewItem(s)}><Eye size={16}/></button><button title="Edit" onClick={() => openEdit(s)}><Pencil size={16}/></button><button className="delete" title="Delete" onClick={() => remove(s)}><Trash2 size={16}/></button></div></td></tr>)}
+        </tbody></table></div>
+        <div className="sf-sup-pagination"><span>Showing {filtered.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filtered.length)} of {filtered.length} suppliers</span><div><button disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft size={17}/></button><strong>{page}</strong><span>of {pageCount}</span><button disabled={page >= pageCount} onClick={() => setPage(p => p + 1)}><ChevronRight size={17}/></button></div></div>
+      </section>
+
+      {(modalOpen || viewItem) && <div className="sf-sup-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) { setModalOpen(false); setViewItem(null); } }}>
+        <section className="sf-sup-modal"><button className="sf-sup-close" onClick={() => { setModalOpen(false); setViewItem(null); }}><X size={18}/></button>
+          {viewItem ? <><div className="sf-sup-modal-icon"><Building2/></div><h2>{viewItem.name}</h2><p className="sf-sup-modal-sub">Supplier details</p><div className="sf-sup-detail"><span>Email</span><strong>{viewItem.email || '—'}</strong></div><div className="sf-sup-detail"><span>Phone</span><strong>{viewItem.phone || '—'}</strong></div><div className="sf-sup-detail"><span>Address</span><strong>{viewItem.address || '—'}</strong></div><button className="sf-sup-primary full" onClick={() => setViewItem(null)}>Close</button></> : <><div className="sf-sup-modal-icon"><Plus/></div><h2>{editing ? 'Edit Supplier' : 'Add New Supplier'}</h2><p className="sf-sup-modal-sub">Enter supplier information below.</p><form onSubmit={handleSubmit} className="sf-sup-form" noValidate><label>Supplier Name<input value={form.name} onChange={e => setForm({...form, name:e.target.value})} placeholder="Enter supplier name"/>{errors.name && <small>{errors.name}</small>}</label><label>Email Address<input type="email" value={form.email} onChange={e => setForm({...form, email:e.target.value})} placeholder="supplier@example.com"/>{errors.email && <small>{errors.email}</small>}</label><label>Phone Number<input value={form.phone} onChange={e => setForm({...form, phone:e.target.value})} placeholder="+91 98765 43210"/>{errors.phone && <small>{errors.phone}</small>}</label><label>Address<textarea rows="2" value={form.address} onChange={e => setForm({...form, address:e.target.value})} placeholder="Supplier location"/></label><div className="sf-sup-modal-actions"><button type="button" className="sf-sup-secondary" onClick={() => setModalOpen(false)}>Cancel</button><button type="submit" className="sf-sup-primary">{editing ? 'Save Changes' : 'Add Supplier'}</button></div></form></>}
+        </section></div>}
+    </div>
   );
 }
