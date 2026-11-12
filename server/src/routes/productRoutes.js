@@ -22,6 +22,8 @@ const rules = (required) => {
     body('reorderLevel').optional().isInt({ min: 0 }).withMessage('Reorder level must be a whole number, 0 or more').toInt(),
     body('rating').optional().isFloat({ min: 0, max: 5 }).withMessage('Rating must be between 0 and 5').toFloat(),
     body('isActive').optional().isBoolean().withMessage('isActive must be true or false').toBoolean(),
+    body('category').optional({ values: 'falsy' }).isString().withMessage('Category must be an id or a name').trim(),
+    body('supplier').optional({ values: 'falsy' }).isString().withMessage('Supplier must be an id or a name').trim(),
   ];
 };
 

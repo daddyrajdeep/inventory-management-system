@@ -21,6 +21,10 @@ export function AuthProvider({ children }) {
   const login = (userData, token) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
+    if (userData.settings) {
+      // the saved preferences follow the user to this device
+      localStorage.setItem('preferences', JSON.stringify(userData.settings));
+    }
     setUser(userData);
   };
 
@@ -44,6 +48,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- the hook belongs with its provider
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');

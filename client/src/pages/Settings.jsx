@@ -5,6 +5,7 @@ import FormField, { inputClass } from '../components/FormField';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import { updateProfile, changePassword } from '../services/userService';
+import { passwordError } from '../utils/password';
 
 // OWNER: Leader
 // Sections: profile, preferences (dark mode, notifications, language), change password
@@ -86,14 +87,16 @@ export default function Settings() {
     e.preventDefault();
     const errors = {};
     if (!pw.current) errors.current = 'Enter your current password';
-    if (pw.next.length < 6) errors.next = 'At least 6 characters';
+    const pwErr = passwordError(pw.next, 'New password');
+    if (pwErr) errors.next = pwErr;
     if (pw.confirm !== pw.next) errors.confirm = 'Passwords do not match';
     setPwErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
     setSavingPw(true);
     try {
-      await changePassword({ currentPassword: pw.current, newPassword: pw.next });
+      const { token } = await changePassword({ currentPassword: pw.current, newPassword: pw.next });
+      if (token) localStorage.setItem('token', token); // the old token stops working after a password change
       setPw({ current: '', next: '', confirm: '' });
       toast.success('Password changed');
     } catch (err) {

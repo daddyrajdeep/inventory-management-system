@@ -9,11 +9,11 @@ import { PreferencesProvider } from './context/PreferencesContext.jsx';
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <PreferencesProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <PreferencesProvider>
           <App />
-        </AuthProvider>
-      </PreferencesProvider>
+        </PreferencesProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>
 );

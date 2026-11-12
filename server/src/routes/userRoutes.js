@@ -3,6 +3,7 @@ import { body, param } from 'express-validator';
 import { protect, authorize } from '../middleware/auth.js';
 import validate from '../middleware/validate.js';
 import { listUsers, createUser, updateUserRole, setUserActive } from '../controllers/userController.js';
+import { passwordRule } from '../utils/passwordRule.js';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.post(
   [
     body('name').trim().notEmpty().withMessage('Name is required'),
     body('email').trim().toLowerCase().isEmail().withMessage('Enter a valid email'),
-    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    passwordRule('password', 'Password'),
     body('role').optional().isIn(roles).withMessage('Role must be admin, manager or staff'),
   ],
   validate,

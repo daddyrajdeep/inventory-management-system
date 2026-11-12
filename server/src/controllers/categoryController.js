@@ -13,7 +13,7 @@ async function assertNameFree(name, exceptId) {
 export const listCategories = asyncHandler(async (req, res) => {
   const [categories, counts] = await Promise.all([
     Category.find().sort({ name: 1 }),
-    Product.aggregate([{ $group: { _id: '$category', count: { $sum: 1 } } }]),
+    Product.aggregate([{ $match: { isActive: true } }, { $group: { _id: '$category', count: { $sum: 1 } } }]),
   ]);
   const countOf = new Map(counts.map((c) => [String(c._id), c.count]));
   res.json(categories.map((c) => ({ ...c.toJSON(), productCount: countOf.get(String(c._id)) || 0 })));

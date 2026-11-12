@@ -3,7 +3,8 @@ import { body } from 'express-validator';
 import rateLimit from 'express-rate-limit';
 import { protect } from '../middleware/auth.js';
 import validate from '../middleware/validate.js';
-import { login, me, updateProfile, changePassword } from '../controllers/authController.js';
+import { login, me, updateProfile, updateSettings, changePassword } from '../controllers/authController.js';
+import { passwordRule } from '../utils/passwordRule.js';
 
 const router = Router();
 
@@ -30,11 +31,22 @@ router.post(
 router.get('/me', protect, me);
 router.put('/profile', protect, [nameRule, emailRule], validate, updateProfile);
 router.put(
+  '/settings',
+  protect,
+  [
+    body('notifications').optional().isBoolean().withMessage('notifications must be true or false').toBoolean(),
+    body('darkMode').optional().isBoolean().withMessage('darkMode must be true or false').toBoolean(),
+    body('language').optional().isIn(['en', 'hi', 'bn']).withMessage('Unsupported language'),
+  ],
+  validate,
+  updateSettings
+);
+router.put(
   '/password',
   protect,
   [
     body('currentPassword').notEmpty().withMessage('Current password is required'),
-    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+    passwordRule('newPassword', 'New password'),
   ],
   validate,
   changePassword

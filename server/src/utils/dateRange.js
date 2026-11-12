@@ -13,7 +13,14 @@ const startOfDayIST = (date) => {
   return new Date(shifted.getTime() - IST_OFFSET_MS);
 };
 
-const parseDay = (str) => new Date(`${str}T00:00:00+05:30`); // str is "YYYY-MM-DD"
+// str is "YYYY-MM-DD". Rejects impossible dates like 2026-02-31 instead of letting them roll over.
+const parseDay = (str) => {
+  const date = new Date(`${str}T00:00:00+05:30`);
+  if (Number.isNaN(date.getTime()) || new Date(date.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10) !== str) {
+    throw new ApiError(400, `Invalid date: ${str}`);
+  }
+  return date;
+};
 
 // Reads the date range from the query string:
 //   ?from=2026-11-01&to=2026-11-30   (both inclusive)   or   ?days=30  (default, ends today)

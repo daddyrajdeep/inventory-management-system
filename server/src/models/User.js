@@ -6,9 +6,11 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     // select:false hides the hash by default. At login use .select('+password')
-    password: { type: String, required: true, minlength: 6, select: false },
+    password: { type: String, required: true, minlength: 8, select: false },
     role: { type: String, enum: ['admin', 'manager', 'staff'], default: 'staff' },
     isActive: { type: Boolean, default: true },
+    // Bumped on password change; tokens carrying an older version are rejected
+    tokenVersion: { type: Number, default: 0 },
     settings: {
       notifications: { type: Boolean, default: true },
       darkMode: { type: Boolean, default: false },

@@ -5,8 +5,13 @@ import 'dotenv/config';
 import './../config/mongooseSetup.js';
 import mongoose from 'mongoose';
 import connectDB from '../config/db.js';
-import { User, Category, Supplier, Product, Sale, Expense, PurchaseOrder, Alert } from '../models/index.js';
+import { User, Category, Supplier, Product, Sale, StockMovement, Expense, PurchaseOrder, Alert } from '../models/index.js';
 import { nextNumber } from '../utils/sequence.js';
+
+if (process.env.NODE_ENV === 'production' && !process.argv.includes('--force')) {
+  console.error('Refusing to seed demo users with published passwords in production. Use --force if you really mean it.');
+  process.exit(1);
+}
 
 const demoUsers = [
   { name: 'Admin User', email: 'admin@demo.com', password: 'Admin@123', role: 'admin' },
@@ -34,6 +39,11 @@ if ((await Product.countDocuments()) > 0) {
 } else {
   const admin = await User.findOne({ email: 'admin@demo.com' });
   const staff = await User.findOne({ email: 'rahul@demo.com' });
+  if (!admin || !staff) {
+    console.error('Demo users admin@demo.com and rahul@demo.com are needed for demo data. Nothing else was added.');
+    await mongoose.disconnect();
+    process.exit(1);
+  }
 
   const cats = Object.fromEntries(
     (await Category.insertMany(['Electronics', 'Stationery', 'Home', 'Furniture'].map((name) => ({ name })))).map((c) => [c.name, c._id])
@@ -44,22 +54,31 @@ if ((await Product.countDocuments()) > 0) {
     { name: 'Modern Furniture', contactPerson: 'Karan Roy', email: 'modern@example.com', phone: '9876543212', address: 'Kolkata' },
   ]);
 
-  // quantity is set directly here (seeding only). In the app, stock only changes through the stock service.
-  const products = await Product.insertMany([
-    { name: 'Wireless Mouse', sku: 'WM-001', category: cats.Electronics, supplier: sups[0]._id, costPrice: 380, price: 599, quantity: 120, reorderLevel: 20, rating: 4 },
-    { name: 'USB-C Cable', sku: 'UC-002', category: cats.Electronics, supplier: sups[0]._id, costPrice: 120, price: 249, quantity: 8, reorderLevel: 25, rating: 3 },
-    { name: 'Notebook A5', sku: 'NB-003', category: cats.Stationery, supplier: sups[1]._id, costPrice: 45, price: 79, quantity: 340, reorderLevel: 50, rating: 4 },
-    { name: 'Desk Lamp', sku: 'DL-004', category: cats.Home, supplier: sups[2]._id, costPrice: 520, price: 899, quantity: 0, reorderLevel: 10, rating: 5 },
-    { name: 'Water Bottle 1L', sku: 'WB-005', category: cats.Home, supplier: sups[1]._id, costPrice: 190, price: 349, quantity: 64, reorderLevel: 15, rating: 4 },
-    { name: 'Office Chair', sku: 'OC-006', category: cats.Furniture, supplier: sups[2]._id, costPrice: 3600, price: 5499, quantity: 12, reorderLevel: 5, rating: 5 },
-    { name: 'HDMI Cable', sku: 'HC-007', category: cats.Electronics, supplier: sups[0]._id, costPrice: 170, price: 329, quantity: 15, reorderLevel: 20, rating: 3 },
-    { name: 'Sticky Notes', sku: 'SN-008', category: cats.Stationery, supplier: sups[1]._id, costPrice: 28, price: 59, quantity: 210, reorderLevel: 40, rating: 4 },
-  ]);
+  // These are the quantities the demo should END with. The seed sells through them below,
+  // so products start higher and every sale leaves a stock movement, just like the real app.
+  const catalogue = [
+    { name: 'Wireless Mouse', sku: 'WM-001', category: cats.Electronics, supplier: sups[0]._id, costPrice: 380, price: 599, finalQty: 120, reorderLevel: 20 },
+    { name: 'USB-C Cable', sku: 'UC-002', category: cats.Electronics, supplier: sups[0]._id, costPrice: 120, price: 249, finalQty: 8, reorderLevel: 25 },
+    { name: 'Notebook A5', sku: 'NB-003', category: cats.Stationery, supplier: sups[1]._id, costPrice: 45, price: 79, finalQty: 340, reorderLevel: 50 },
+    { name: 'Desk Lamp', sku: 'DL-004', category: cats.Home, supplier: sups[2]._id, costPrice: 520, price: 899, finalQty: 0, reorderLevel: 10 },
+    { name: 'Water Bottle 1L', sku: 'WB-005', category: cats.Home, supplier: sups[1]._id, costPrice: 190, price: 349, finalQty: 64, reorderLevel: 15 },
+    { name: 'Office Chair', sku: 'OC-006', category: cats.Furniture, supplier: sups[2]._id, costPrice: 3600, price: 5499, finalQty: 12, reorderLevel: 5 },
+    { name: 'HDMI Cable', sku: 'HC-007', category: cats.Electronics, supplier: sups[0]._id, costPrice: 170, price: 329, finalQty: 15, reorderLevel: 20 },
+    { name: 'Sticky Notes', sku: 'SN-008', category: cats.Stationery, supplier: sups[1]._id, costPrice: 28, price: 59, finalQty: 210, reorderLevel: 40 },
+  ];
 
   // A small repeatable pseudo-random generator, so every run produces the same demo data
   let seed = 42;
   const rand = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
   const pickOne = (list) => list[Math.floor(rand() * list.length)];
+  const shuffle = (list) => {
+    const out = [...list];
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  };
   const daysAgo = (n, hour = 11) => {
     const d = new Date();
     d.setDate(d.getDate() - n);
@@ -67,16 +86,15 @@ if ((await Product.countDocuments()) > 0) {
     return d;
   };
 
-  // ~120 days of sales, 0-2 invoices a day
+  // ~120 days of sales, 0-2 invoices a day. Planned first so opening stock can cover them.
   const customers = ['Walk-in', 'Walk-in', 'Walk-in', 'Aman Traders', 'City Mart', 'TechMart Pvt. Ltd.', 'Campus Stores', 'Bright Solutions'];
-  let saleCount = 0;
+  const planned = [];
   for (let day = 120; day >= 0; day--) {
     for (let n = Math.floor(rand() * 3); n > 0; n--) {
-      const picked = [...products].sort(() => rand() - 0.5).slice(0, 1 + Math.floor(rand() * 3));
-      const items = picked.map((p) => ({ product: p._id, name: p.name, quantity: 1 + Math.floor(rand() * 4), unitPrice: p.price }));
+      const picked = shuffle(catalogue).slice(0, 1 + Math.floor(rand() * 3));
+      const items = picked.map((p) => ({ product: p.sku, name: p.name, quantity: 1 + Math.floor(rand() * 4), unitPrice: p.price }));
       const gross = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-      await Sale.create({
-        invoiceNumber: await nextNumber('INV'),
+      planned.push({
         items,
         discount: rand() < 0.2 ? Math.round(gross * 0.05) : 0,
         customerName: pickOne(customers),
@@ -84,9 +102,48 @@ if ((await Product.countDocuments()) > 0) {
         soldBy: rand() < 0.5 ? admin._id : staff._id,
         createdAt: daysAgo(day), // backdated, so the charts have history
       });
-      saleCount++;
     }
   }
+
+  const soldTotals = new Map();
+  for (const sale of planned) for (const i of sale.items) soldTotals.set(i.product, (soldTotals.get(i.product) || 0) + i.quantity);
+
+  const products = await Product.insertMany(
+    catalogue.map((p) => {
+      const { finalQty, ...fields } = p;
+      return { ...fields, quantity: finalQty + (soldTotals.get(p.sku) || 0) };
+    })
+  );
+  const bySku = new Map(products.map((p) => [p.sku, p]));
+  const running = new Map(products.map((p) => [p.sku, p.quantity]));
+
+  await StockMovement.insertMany(
+    products.map((p) => ({
+      product: p._id, type: 'IN', quantity: p.quantity, previousQty: 0, newQty: p.quantity,
+      reason: 'Opening stock (seed)', performedBy: admin._id, createdAt: daysAgo(121, 9),
+    }))
+  );
+
+  let saleCount = 0;
+  for (const plan of planned) {
+    const sale = await Sale.create({
+      ...plan,
+      invoiceNumber: await nextNumber('INV'),
+      items: plan.items.map((i) => ({ ...i, product: bySku.get(i.product)._id })),
+    });
+    for (const i of plan.items) {
+      const previousQty = running.get(i.product);
+      const newQty = previousQty - i.quantity;
+      running.set(i.product, newQty);
+      await StockMovement.create({
+        product: bySku.get(i.product)._id, type: 'OUT', quantity: i.quantity, previousQty, newQty,
+        reason: `Sold on ${sale.invoiceNumber}`, referenceModel: 'Sale', referenceId: sale._id,
+        performedBy: plan.soldBy, createdAt: plan.createdAt,
+      });
+    }
+    saleCount++;
+  }
+  for (const p of products) await Product.updateOne({ _id: p._id }, { quantity: running.get(p.sku) });
 
   // ~6 months of expenses
   const expenseTemplates = [
