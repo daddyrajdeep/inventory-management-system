@@ -50,3 +50,8 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 **Files:** `pages/Products.jsx` (kit rebuild).
 **Checks:** eslint exit 0; Gate 5 `vite build` success; browser: 8-row table with correct columns; product drawer shows facts grid + real mini-history (IN/OUT movements) + View full history; delete of Desk Lamp (has history) shows server 409 verbatim + working "Deactivate instead" (cancelled to preserve demo data). Screenshot captured.
 **NOT-RUN:** none.
+
+## P6 — Sales
+**Files:** `pages/Sales.jsx` (kit rebuild, POS cart), deleted `pages/Sales.css`.
+**Checks:** eslint exit 0; browser: multi-line cart added HDMI Cable + Wireless Mouse → one invoice INV-2026-0126 (₹928), low-stock item selectable; invoice drawer shows real line items + gross/total; payment badges Cash/UPI/Card; real analytics (7-day bar chart + top products). Screenshot captured.
+**Note:** test sale INV-2026-0126 left in demo data; cleaned in P9.
