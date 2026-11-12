@@ -51,3 +51,8 @@ export async function receiveOrder(id) {
   const { data } = await api.post(`/purchase-orders/${id}/receive`);
   return data;
 }
+
+// Convenience: cancel via the status endpoint.
+export async function cancelOrder(id) {
+  return updateOrderStatus(id, "cancelled");
+}

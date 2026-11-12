@@ -39,3 +39,9 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 **Files:** `pages/Inventory.jsx` (kit rebuild), `services/stockService.js` (getMovements filters).
 **Checks:** eslint exit 0; browser: Stock In on Desk Lamp 5→10 with live "5 → 10" preview, toast "Stock added — Desk Lamp", quantity cell ticks and refreshes; URL-synced tabs/filters; movement ledger with reference links. Screenshot captured.
 **NOT-RUN:** none.
+
+## P4 — Purchase Orders
+**Files:** `pages/PurchaseOrders.jsx` (kit rebuild), `services/orderService.js` (cancelOrder), `components/ui/DataTable.jsx` (row-click ignores interactive targets).
+**Checks:** eslint exit 0; browser: created+placed PO-2026-0005 via the create drawer (₹60, Desk Lamp ×3); Receive confirm → "Order received — stock updated" + real-time socket alert; detail drawer shows the RECEIVED stamp + lifecycle stepper + ledger line items. Screenshot captured.
+**Fix:** row-action buttons no longer bubble to the row click (was opening the detail drawer over the confirm dialog).
+**Note:** test order PO-2026-0005 (received) left in demo data; cleaned in P9.

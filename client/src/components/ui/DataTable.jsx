@@ -64,7 +64,7 @@ export default function DataTable({
             rows.map((row) => (
               <tr
                 key={row[rowKey]}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onClick={onRowClick ? (e) => { if (e.target.closest('button, a, input, select, label')) return; onRowClick(row); } : undefined}
                 className={`border-b border-line last:border-0 transition-colors duration-[120ms] hover:bg-paper ${
                   onRowClick ? 'cursor-pointer' : ''
                 }`}
