@@ -1,209 +1,223 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Layers3, Package, PauseCircle, ShoppingBag, Search, Plus, Download,
-  Upload, Pencil, Trash2, Eye, ChevronLeft, ChevronRight, Grid2X2,
-  List, X, Headphones, Monitor, Keyboard, Laptop, Boxes, CheckCircle2,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Layers3, Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/categoryService';
+import PageHeader from '../components/ui/PageHeader';
+import DataTable from '../components/ui/DataTable';
+import Modal from '../components/ui/Modal';
+import Button from '../components/ui/Button';
+import IconButton from '../components/ui/IconButton';
+import FormField from '../components/ui/FormField';
+import Input from '../components/ui/Input';
+import Textarea from '../components/ui/Textarea';
+import Select from '../components/ui/Select';
+import SearchInput from '../components/ui/SearchInput';
+import EmptyState from '../components/ui/EmptyState';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
-import { formatDate } from '../utils/format';
-import { downloadCsv } from '../utils/csv';
-import './Categories.css';
+import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/categoryService';
+import { formatDate, plural } from '../utils/format';
 
-const PAGE_SIZE = 5;
-const MAX_PAGE_BUTTONS = 5;
-const iconSet = [Headphones, Monitor, Keyboard, Laptop, Boxes];
-const colors = ['violet', 'blue', 'pink', 'cyan', 'purple'];
-const MANAGER_ROLES = ['admin', 'manager'];
-
-const showDate = (value) => (value ? formatDate(value) : '—');
-
-// Quote-aware CSV parser: handles "a, b", escaped "" quotes and newlines inside quotes.
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let cell = '';
-  let quoted = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    if (quoted) {
-      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i += 1; }
-      else if (ch === '"') quoted = false;
-      else cell += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ',') { row.push(cell); cell = ''; }
-    else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && text[i + 1] === '\n') i += 1;
-      row.push(cell); rows.push(row); row = []; cell = '';
-    } else cell += ch;
-  }
-  if (cell || row.length) { row.push(cell); rows.push(row); }
-  return rows.map((r) => r.map((v) => v.trim())).filter((r) => r.some(Boolean));
-}
+const emptyForm = { name: '', description: '' };
 
 export default function Categories() {
   const { user } = useAuth();
-  const canManage = MANAGER_ROLES.includes(user?.role);
+  const canManage = user?.role === 'admin' || user?.role === 'manager';
+  const navigate = useNavigate();
+
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [view, setView] = useState('list');
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({ name: '', description: '' });
-  const [selected, setSelected] = useState(null);
+  const [sort, setSort] = useState('name');
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const fileRef = useRef(null);
+
+  const [detail, setDetail] = useState(null);
+  const [del, setDel] = useState(null);
+  const [delError, setDelError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    let alive = true;
-    getCategories().then((items) => {
-      if (alive) setCategories(items);
-    }).catch((err) => {
-      if (!alive) return;
-      setLoadError(err.message || 'Unable to load categories');
-      toast.error(err.message || 'Unable to load categories');
-    }).finally(() => alive && setLoading(false));
-    return () => { alive = false; };
-  }, []);
+    let active = true;
+    getCategories()
+      .then((list) => { if (active) { setCategories(list); setLoadError(''); } })
+      .catch((err) => { if (active) { setLoadError(err.message); toast.error(err.message); } })
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [refreshKey]);
 
-  const reload = async () => {
-    try {
-      setCategories(await getCategories());
-      setLoadError('');
-    } catch (err) {
-      toast.error(err.message || 'Unable to reload categories');
-    }
-  };
+  const refresh = () => setRefreshKey((k) => k + 1);
+  const goToProducts = (name) => navigate(`/products?category=${encodeURIComponent(name)}`);
 
-  const inUseCount = categories.filter((c) => c.productCount > 0).length;
-  const totalProducts = categories.reduce((sum, c) => sum + (c.productCount || 0), 0);
-  const filtered = useMemo(() => categories.filter((c) => {
+  const totalProducts = useMemo(() => categories.reduce((sum, c) => sum + (c.productCount ?? 0), 0), [categories]);
+
+  const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return !q || `${c.name} ${c.description || ''}`.toLowerCase().includes(q);
-  }), [categories, search]);
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pages);
-  const offset = (currentPage - 1) * PAGE_SIZE;
-  const visible = filtered.slice(offset, offset + PAGE_SIZE);
-  const firstButton = Math.max(1, Math.min(currentPage - Math.floor(MAX_PAGE_BUTTONS / 2), pages - MAX_PAGE_BUTTONS + 1));
-  const pageButtons = Array.from({ length: Math.min(MAX_PAGE_BUTTONS, pages) }, (_, i) => firstButton + i);
-  const statValue = (value) => (loading || loadError ? '—' : value);
-  const emptyMessage = loading ? 'Loading categories...' : loadError ? `Could not load categories: ${loadError}` : 'No categories found.';
+    const list = categories.filter((c) => !q || `${c.name} ${c.description ?? ''}`.toLowerCase().includes(q));
+    const sorted = [...list];
+    if (sort === 'products') sorted.sort((a, b) => (b.productCount ?? 0) - (a.productCount ?? 0) || a.name.localeCompare(b.name));
+    else if (sort === 'newest') sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    else sorted.sort((a, b) => a.name.localeCompare(b.name));
+    return sorted;
+  }, [categories, search, sort]);
 
-  const openAdd = () => { setSelected(null); setForm({ name: '', description: '' }); setModal('form'); };
-  const openEdit = (category) => { setSelected(category); setForm({ name: category.name, description: category.description || '' }); setModal('form'); };
-  const saveCategory = async (event) => {
-    event.preventDefault();
+  // Mirrors the server's case-insensitive exact-name check (excluding the row being edited).
+  const nameTaken = useMemo(() => {
+    const n = form.name.trim().toLowerCase();
+    return !!n && categories.some((c) => c.id !== editing?.id && c.name.trim().toLowerCase() === n);
+  }, [form.name, categories, editing]);
+
+  function openForm(category) {
+    setEditing(category);
+    setForm(category ? { name: category.name ?? '', description: category.description ?? '' } : { ...emptyForm });
+    setErrors({});
+    setFormOpen(true);
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     const name = form.name.trim();
-    if (!name) return toast.error('Category name is required');
+    if (!name) { setErrors({ name: 'Category name is required' }); return; }
+    setErrors({});
     const payload = { name, description: form.description.trim() };
     setSaving(true);
     try {
-      if (selected) {
-        await updateCategory(selected.id, payload);
-        toast.success('Category updated');
-      } else {
-        await createCategory(payload);
-        toast.success('Category added');
-      }
-      setModal(null);
-      await reload();
-    } catch (err) {
-      toast.error(err.message || 'Unable to save category');
-    } finally {
+      if (editing) { await updateCategory(editing.id, payload); toast.success('Changes saved'); }
+      else { await createCategory(payload); toast.success('Category created'); }
       setSaving(false);
-    }
-  };
-  const removeCategory = async (category) => {
-    if (!window.confirm(`Delete category “${category.name}”?`)) return;
-    try {
-      await deleteCategory(category.id);
-      toast.success('Category deleted');
-      await reload();
+      setFormOpen(false);
+      refresh();
     } catch (err) {
-      toast.error(err.message || 'Unable to delete category');
+      setSaving(false);
+      toast.error(err.message);
     }
   };
-  const exportCsv = () => {
-    const rows = [['Category', 'Description', 'Products', 'Created At'], ...categories.map((c) => [c.name, c.description || '', c.productCount || 0, c.createdAt ? formatDate(c.createdAt) : ''])];
-    downloadCsv('stockflow-categories.csv', rows);
-  };
-  const importCsv = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    const rows = parseCsv((await file.text()).replace(/^\uFEFF/, ''));
-    const hasHeader = ['category', 'name'].includes(rows[0]?.[0]?.toLowerCase());
-    const dataRows = hasHeader ? rows.slice(1) : rows;
-    if (!dataRows.length) return toast.error('The CSV file has no category rows');
-    setImporting(true);
-    let imported = 0;
-    let failed = 0;
-    let firstFailure = '';
-    for (const [index, [name = '', description = '']] of dataRows.entries()) {
-      try {
-        if (!name) throw new Error('Category name is required');
-        await createCategory({ name, description });
-        imported += 1;
-      } catch (err) {
-        failed += 1;
-        if (!firstFailure) firstFailure = `Row ${index + (hasHeader ? 2 : 1)}${name ? ` (“${name}”)` : ''}: ${err.message}`;
-      }
+
+  const doDelete = async () => {
+    setDeleting(true);
+    setDelError(null);
+    try {
+      await deleteCategory(del.id);
+      toast.success('Category deleted');
+      setDeleting(false);
+      setDel(null);
+      refresh();
+    } catch (err) {
+      setDeleting(false);
+      setDelError(err);
     }
-    setImporting(false);
-    const summary = `${imported} imported, ${failed} failed`;
-    if (failed) toast.error(`${summary}. ${firstFailure}`, { duration: 6000 });
-    else toast.success(summary);
-    if (imported) await reload();
   };
+
+  const columns = [
+    { key: 'name', label: 'Category', render: (c) => (
+      <div>
+        <p className="font-medium text-ink">{c.name}</p>
+        <p className="text-xs text-ink-soft">{c.description || '—'}</p>
+      </div>
+    ) },
+    { key: 'productCount', label: 'Products', align: 'right', num: true, render: (c) => (
+      <button type="button" onClick={() => goToProducts(c.name)} className="num font-medium text-ink underline-offset-2 hover:underline">
+        {c.productCount ?? 0}
+      </button>
+    ) },
+    { key: 'createdAt', label: 'Created', render: (c) => <span className="text-ink-soft">{formatDate(c.createdAt)}</span> },
+    ...(canManage ? [{ key: 'actions', label: '', align: 'right', render: (c) => (
+      <div className="flex justify-end gap-0.5">
+        <IconButton label={`Edit ${c.name}`} onClick={() => openForm(c)}><Pencil size={16} /></IconButton>
+        <IconButton label={`Delete ${c.name}`} className="text-out" onClick={() => { setDel(c); setDelError(null); }}><Trash2 size={16} /></IconButton>
+      </div>
+    ) }] : []),
+  ];
 
   return (
-    <div className="sf-categories-page">
-      <div className="sf-cat-heading">
-        <div className="sf-cat-title-wrap">
-          <div className="sf-cat-title-icon"><Layers3 size={28} /></div>
-          <div><div className="sf-cat-breadcrumb">Dashboard <span>›</span> Categories</div><h1>Categories</h1><p>Manage product categories, organize inventory and track stock.</p></div>
-        </div>
-        <div className="sf-cat-actions">
-          {canManage && <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={importCsv} />}
-          {canManage && <button className="sf-cat-secondary" disabled={importing} onClick={() => fileRef.current?.click()} title="CSV columns: Category, Description"><Upload size={17} /> {importing ? 'Importing...' : 'Import (CSV)'}</button>}
-          <button className="sf-cat-secondary" onClick={exportCsv} disabled={!categories.length}><Download size={17} /> Export</button>
-          {canManage && <button className="sf-cat-primary" onClick={openAdd}><Plus size={19} /> Add Category</button>}
-        </div>
+    <>
+      <PageHeader
+        title="Categories"
+        subtitle="Organize your catalog."
+        action={canManage ? <Button onClick={() => openForm(null)}><Plus size={16} /> New category</Button> : undefined}
+      />
+
+      <p className="num mb-4 text-sm text-ink-soft">{plural(categories.length, 'category')} · {plural(totalProducts, 'product')}</p>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by name or description…" className="min-w-50 flex-1" />
+        <Select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort" className="w-44">
+          <option value="name">Name A–Z</option>
+          <option value="products">Most products</option>
+          <option value="newest">Newest</option>
+        </Select>
       </div>
 
-      <section className="sf-cat-stats">
-        <Stat icon={Layers3} title="Total Categories" value={statValue(categories.length)} tone="purple" />
-        <Stat icon={Package} title="Categories in Use" value={statValue(inUseCount)} tone="blue" />
-        <Stat icon={PauseCircle} title="Empty Categories" value={statValue(categories.length - inUseCount)} tone="orange" />
-        <Stat icon={ShoppingBag} title="Total Products" value={statValue(totalProducts.toLocaleString('en-IN'))} tone="green" />
-      </section>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={loading}
+        onRowClick={(c) => (canManage ? openForm(c) : setDetail(c))}
+        empty={loadError
+          ? <EmptyState title={loadError} action={<Button size="sm" variant="secondary" onClick={refresh}>Retry</Button>} />
+          : <EmptyState
+              icon={Layers3}
+              title={search ? 'No categories match your search.' : 'No categories yet.'}
+              action={search
+                ? <Button size="sm" variant="secondary" onClick={() => setSearch('')}>Clear search</Button>
+                : canManage ? <Button size="sm" onClick={() => openForm(null)}>Create your first category</Button> : undefined}
+            />}
+      />
 
-      <section className="sf-cat-table-panel">
-        <div className="sf-cat-toolbar">
-          <label className="sf-cat-search"><Search size={19} /><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search categories by name or description..." /></label>
-          <div className="sf-cat-view-toggle"><button className={view === 'list' ? 'selected' : ''} onClick={() => setView('list')} aria-label="List view"><List size={19} /></button><button className={view === 'grid' ? 'selected' : ''} onClick={() => setView('grid')} aria-label="Grid view"><Grid2X2 size={18} /></button></div>
-        </div>
+      {/* Read-only detail (staff) */}
+      <Modal open={!!detail} title={detail?.name || ''} onClose={() => setDetail(null)}>
+        {detail && (
+          <div className="space-y-4">
+            <p className="text-sm text-ink-soft">{detail.description || 'No description provided.'}</p>
+            <dl className="grid grid-cols-2 gap-3 text-[13px]">
+              <div><dt className="text-xs text-ink-soft">Products</dt><dd className="num text-ink">{detail.productCount ?? 0}</dd></div>
+              <div><dt className="text-xs text-ink-soft">Created</dt><dd className="text-ink">{formatDate(detail.createdAt)}</dd></div>
+            </dl>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => goToProducts(detail.name)}>View products</Button>
+              <Button variant="ghost" onClick={() => setDetail(null)}>Close</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
-        {view === 'list' ? <div className="sf-cat-table-scroll"><table className="sf-cat-table"><thead><tr><th>#</th><th>Category</th><th>Description</th><th>Products</th><th>Created At</th><th>Actions</th></tr></thead><tbody>
-          {loading || loadError || visible.length === 0 ? <tr><td colSpan="6" className="sf-cat-empty">{emptyMessage}</td></tr> : visible.map((category, index) => {
-            const Icon = iconSet[(index + offset) % iconSet.length]; const tone = colors[(index + offset) % colors.length];
-            return <tr key={category.id}><td>{offset + index + 1}</td><td><div className="sf-cat-name"><span className={`sf-cat-product-icon ${tone}`}><Icon size={21} /></span><strong>{category.name}</strong></div></td><td>{category.description || '—'}</td><td className="sf-cat-count">{category.productCount ?? '—'}</td><td>{showDate(category.createdAt)}</td><td><div className="sf-cat-row-actions">{canManage && <button title="Edit" aria-label={`Edit ${category.name}`} onClick={() => openEdit(category)}><Pencil size={16} /></button>}{canManage && <button title="Delete" aria-label={`Delete ${category.name}`} className="danger" onClick={() => removeCategory(category)}><Trash2 size={16} /></button>}<button title="View" aria-label={`View ${category.name}`} onClick={() => { setSelected(category); setModal('view'); }}><Eye size={17} /></button></div></td></tr>;
-          })}
-        </tbody></table></div> : loading || loadError || visible.length === 0 ? <p className="sf-cat-empty">{emptyMessage}</p> : <div className="sf-cat-grid">{visible.map((category, index) => { const Icon = iconSet[(index + offset) % iconSet.length]; return <article className="sf-cat-card" key={category.id}><span className={`sf-cat-product-icon ${colors[(index + offset) % colors.length]}`}><Icon size={24} /></span><h3>{category.name}</h3><p>{category.description || 'No description'}</p><div><b>{category.productCount ?? '—'}</b><small>Products</small></div><footer>{canManage ? <><button onClick={() => openEdit(category)}><Pencil size={15} /> Edit</button><button onClick={() => removeCategory(category)}><Trash2 size={15} /> Delete</button></> : <button onClick={() => { setSelected(category); setModal('view'); }}><Eye size={15} /> View</button>}</footer></article>; })}</div>}
+      {/* Create / edit */}
+      <Modal open={formOpen} title={editing ? 'Edit category' : 'New category'} onClose={() => { if (!saving) setFormOpen(false); }}>
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <FormField label="Name" error={errors.name} hint={nameTaken ? 'A category with this name already exists' : undefined}>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Accessories" autoFocus />
+          </FormField>
+          <FormField label="Description">
+            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Briefly describe this category" />
+          </FormField>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" onClick={() => setFormOpen(false)} disabled={saving}>Cancel</Button>
+            <Button type="submit" loading={saving}>{editing ? 'Save changes' : 'Create category'}</Button>
+          </div>
+        </form>
+      </Modal>
 
-        <div className="sf-cat-pagination"><span>Showing {filtered.length ? offset + 1 : 0} – {Math.min(offset + PAGE_SIZE, filtered.length)} of {filtered.length} categories</span><div><button disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page"><ChevronLeft size={18} /></button>{pageButtons.map((n) => <button key={n} className={currentPage === n ? 'current' : ''} aria-current={currentPage === n ? 'page' : undefined} onClick={() => setPage(n)}>{n}</button>)}<button disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)} aria-label="Next page"><ChevronRight size={18} /></button></div></div>
-      </section>
-
-      {modal && <div className="sf-cat-modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !saving && setModal(null)}><div className="sf-cat-modal" role="dialog" aria-modal="true"><header><h2>{modal === 'view' ? 'Category details' : selected ? 'Edit category' : 'Add new category'}</h2><button onClick={() => setModal(null)} disabled={saving} aria-label="Close"><X size={20} /></button></header>{modal === 'view' ? <div className="sf-cat-view-details"><h3>{selected?.name}</h3><p>{selected?.description || 'No description provided.'}</p><p>Products: {selected?.productCount ?? '—'}</p><p>Created: {showDate(selected?.createdAt)}</p><button className="sf-cat-primary" onClick={() => setModal(null)}>Close</button></div> : <form onSubmit={saveCategory}><label>Category name<input autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Accessories" /></label><label>Description<textarea rows="3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Briefly describe this category" /></label><footer><button type="button" className="sf-cat-secondary" disabled={saving} onClick={() => setModal(null)}>Cancel</button><button type="submit" className="sf-cat-primary" disabled={saving}><CheckCircle2 size={17} /> {saving ? 'Saving...' : 'Save Category'}</button></footer></form>}</div></div>}
-    </div>
+      <ConfirmDialog
+        open={!!del}
+        title={`Delete ${del?.name}`}
+        body={delError
+          ? <div className="space-y-3">
+              <p className="text-out">{delError.message}</p>
+              {delError.response?.status === 409 && <Button size="sm" variant="secondary" onClick={() => goToProducts(del.name)}>View products</Button>}
+            </div>
+          : 'This cannot be undone. Categories used by products cannot be deleted.'}
+        confirmLabel="Delete category"
+        danger
+        loading={deleting}
+        onConfirm={doDelete}
+        onClose={() => { if (!deleting) { setDel(null); setDelError(null); } }}
+      />
+    </>
   );
-}
-
-function Stat({ icon: Icon, title, value, tone }) {
-  return <article className={`sf-cat-stat ${tone}`}><div className="sf-cat-stat-icon"><Icon size={24} /></div><div><p>{title}</p><strong>{value}</strong></div><Layers3 className="sf-cat-stat-watermark" size={42} /></article>;
 }

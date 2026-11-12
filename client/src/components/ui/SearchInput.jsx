@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { inputClass } from './Input';
 
+// eslint-disable-next-line react-refresh/only-export-components -- shared debounce helper lives with the input
 export function useDebounced(value, ms = 200) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {

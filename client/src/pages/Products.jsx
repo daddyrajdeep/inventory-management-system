@@ -54,6 +54,7 @@ export default function Products() {
 
   const search = params.get('search') || '';
   const category = params.get('category') || '';
+  const supplier = params.get('supplier') || '';
   const status = params.get('status') || '';
   const inactive = params.get('inactive') === '1';
   const view = params.get('view') || localStorage.getItem('sf.productsView') || 'table';
@@ -88,6 +89,7 @@ export default function Products() {
     const q = {};
     if (debouncedSearch) q.search = debouncedSearch;
     if (category) q.category = category;
+    if (supplier) q.supplier = supplier;
     if (status) q.status = status;
     if (inactive) q.includeInactive = true;
     getProducts(q)
@@ -95,7 +97,7 @@ export default function Products() {
       .catch((err) => active && setLoadError(err.message))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [debouncedSearch, category, status, inactive, refreshKey]);
+  }, [debouncedSearch, category, supplier, status, inactive, refreshKey]);
 
   useEffect(() => {
     getCategories().then(setCategories).catch(() => {});
@@ -213,7 +215,7 @@ export default function Products() {
     { key: 'actions', label: '', align: 'right', render: actions },
   ];
 
-  const filteredEmpty = search || category || status;
+  const filteredEmpty = search || category || supplier || status;
 
   return (
     <>

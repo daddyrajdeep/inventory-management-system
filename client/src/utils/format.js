@@ -36,4 +36,8 @@ export function timeAgo(value) {
   return `${Math.floor(hours / 24)} d ago`;
 }
 
-export const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+export const plural = (n, word) => {
+  if (n === 1) return `${n} ${word}`;
+  const pluralWord = /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`;
+  return `${n} ${pluralWord}`;
+};
