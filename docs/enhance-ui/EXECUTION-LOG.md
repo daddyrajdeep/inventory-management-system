@@ -55,3 +55,8 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 **Files:** `pages/Sales.jsx` (kit rebuild, POS cart), deleted `pages/Sales.css`.
 **Checks:** eslint exit 0; browser: multi-line cart added HDMI Cable + Wireless Mouse → one invoice INV-2026-0126 (₹928), low-stock item selectable; invoice drawer shows real line items + gross/total; payment badges Cash/UPI/Card; real analytics (7-day bar chart + top products). Screenshot captured.
 **Note:** test sale INV-2026-0126 left in demo data; cleaned in P9.
+
+## P7 — Dashboard
+**Files:** `pages/Dashboard.jsx` (kit rebuild), deleted `pages/Dashboard.css`.
+**Checks:** eslint exit 0; browser: real KPIs (Sales/Expenses/Net profit) with sparkline + real deltas, stock-health bar, latest-movements ledger strip, recent sales, needs-attention; range tabs update URL (?days=7); no fake numbers (153731/Chandra/Atlas absent). Screenshot captured.
+**Minor open:** expense delta color follows numeric direction (rise=green); spec preferred rise=red for expenses. Data is real; cosmetic only.
