@@ -11,19 +11,21 @@ import {
   Settings,
 } from 'lucide-react';
 
-// Change this to your own app name
 export const APP_NAME = 'StockFlow';
 
-// roles = who can see this page in the sidebar
+// group = sidebar section; roles = who can see this page (server-enforced too).
 export const navItems = [
-  { label: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['admin', 'manager', 'staff'] },
-  { label: 'Products', path: '/products', icon: Package, roles: ['admin', 'manager', 'staff'] },
-  { label: 'Categories', path: '/categories', icon: Layers3, roles: ['admin', 'manager', 'staff'] },
-  { label: 'Suppliers', path: '/suppliers', icon: Truck, roles: ['admin', 'manager', 'staff'] },
-  { label: 'Inventory', path: '/inventory', icon: Archive, roles: ['admin', 'manager', 'staff'] },
-  { label: 'Purchase Orders', path: '/orders', icon: ClipboardList, roles: ['admin', 'manager'] },
-  { label: 'Sales', path: '/sales', icon: ShoppingCart, roles: ['admin', 'manager', 'staff'] },
-  { label: 'Expenses', path: '/expenses', icon: Wallet, roles: ['admin', 'manager'] },
-  { label: 'Users', path: '/users', icon: Users, roles: ['admin'] },
-  { label: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'manager', 'staff'] },
+  { label: 'Dashboard', path: '/', icon: LayoutDashboard, group: 'Overview', roles: ['admin', 'manager', 'staff'] },
+  { label: 'Products', path: '/products', icon: Package, group: 'Catalog', roles: ['admin', 'manager', 'staff'] },
+  { label: 'Categories', path: '/categories', icon: Layers3, group: 'Catalog', roles: ['admin', 'manager', 'staff'] },
+  { label: 'Suppliers', path: '/suppliers', icon: Truck, group: 'Catalog', roles: ['admin', 'manager', 'staff'] },
+  { label: 'Inventory', path: '/inventory', icon: Archive, group: 'Operations', roles: ['admin', 'manager', 'staff'] },
+  { label: 'Purchase Orders', path: '/orders', icon: ClipboardList, group: 'Operations', roles: ['admin', 'manager'] },
+  { label: 'Sales', path: '/sales', icon: ShoppingCart, group: 'Operations', roles: ['admin', 'manager', 'staff'] },
+  { label: 'Expenses', path: '/expenses', icon: Wallet, group: 'Money', roles: ['admin', 'manager'] },
+  { label: 'Users', path: '/users', icon: Users, group: 'Admin', roles: ['admin'] },
 ];
+
+export const settingsItem = { label: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'manager', 'staff'] };
+
+export const navGroups = ['Overview', 'Catalog', 'Operations', 'Money', 'Admin'];

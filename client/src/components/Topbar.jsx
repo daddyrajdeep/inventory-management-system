@@ -1,63 +1,66 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { LogOut, Menu, Moon, Search, Sun } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Menu, Moon, Search, Sun } from 'lucide-react';
+import { navItems, settingsItem } from '../config/navigation';
 import { useAuth } from '../context/AuthContext';
 import { usePreferences } from '../context/PreferencesContext';
 import AlertBell from './AlertBell';
+import UserMenu from './UserMenu';
+import IconButton from './ui/IconButton';
+import Kbd from './ui/Kbd';
 
-export default function Topbar({ onMenu }) {
-  const { user, logout } = useAuth();
+const initials = (name) => name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+
+export default function Topbar({ onMenu, onOpenPalette }) {
+  const { user } = useAuth();
   const { prefs, setPref } = usePreferences();
-  const navigate = useNavigate();
-  const [search, setSearch] = useState('');
+  const { pathname } = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    const q = search.trim();
-    navigate(q ? `/products?search=${encodeURIComponent(q)}` : '/products');
-  };
+  const current = [...navItems, settingsItem].find((i) => (i.path === '/' ? pathname === '/' : pathname.startsWith(i.path)));
 
   return (
-    <header className="flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 md:px-6">
-      <button className="md:hidden" onClick={onMenu} aria-label="Open menu">
-        <Menu size={22} />
+    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 md:px-6">
+      <IconButton label="Open menu" className="md:hidden" onClick={onMenu}>
+        <Menu size={20} />
+      </IconButton>
+
+      <nav aria-label="Breadcrumb" className="hidden items-center gap-1.5 text-[13px] sm:flex">
+        {current?.group && <span className="text-ink-soft">{current.group}</span>}
+        {current?.group && <span className="text-ink-soft">›</span>}
+        <span className="font-medium text-ink">{current?.label || 'StockFlow'}</span>
+      </nav>
+
+      <button
+        type="button"
+        onClick={onOpenPalette}
+        className="ml-auto flex h-9 w-9 items-center justify-center rounded-sm border border-line text-ink-soft transition-colors hover:border-ink-soft hover:text-ink sm:w-72 sm:justify-start sm:gap-2 sm:px-3"
+        aria-label="Search products and pages"
+      >
+        <Search size={16} />
+        <span className="hidden flex-1 text-left text-[13px] sm:block">Search products, pages…</span>
+        <span className="hidden sm:block"><Kbd>⌘K</Kbd></span>
       </button>
 
-      <form role="search" onSubmit={handleSearch} className="relative max-w-md flex-1">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search products by name or SKU..."
-          aria-label="Search products"
-          className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-indigo-400"
-        />
-      </form>
-
-      <div className="ml-auto flex items-center gap-4">
-        <button
-          onClick={() => setPref('darkMode', !prefs.darkMode)}
-          aria-label="Toggle dark mode"
-          className="text-gray-600 hover:text-gray-800"
-        >
-          {prefs.darkMode ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-
+      <div className="flex items-center gap-1">
+        <IconButton label="Toggle dark mode" onClick={() => setPref('darkMode', !prefs.darkMode)}>
+          {prefs.darkMode ? <Sun size={18} /> : <Moon size={18} />}
+        </IconButton>
         <AlertBell />
-
-        <div className="hidden text-right sm:block">
-          <p className="text-sm font-medium text-gray-800">{user.name}</p>
-          <p className="text-xs capitalize text-gray-500">{user.role}</p>
+        <div className="mx-1 hidden h-6 w-px bg-line sm:block" />
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="Account menu"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-paper text-xs font-semibold text-ink transition-colors hover:bg-line"
+          >
+            {initials(user.name)}
+          </button>
+          {menuOpen && <UserMenu onClose={() => setMenuOpen(false)} align="right" />}
         </div>
-        <button onClick={handleLogout} aria-label="Log out" className="text-gray-500 hover:text-gray-800">
-          <LogOut size={20} />
-        </button>
       </div>
     </header>
   );
