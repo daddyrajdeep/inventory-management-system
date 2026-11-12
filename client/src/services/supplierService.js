@@ -1,6 +1,6 @@
 import api from './api';
 
-// GET /api/suppliers?search=&includeInactive=true
+// GET /api/suppliers?search=&active=true   (inactive suppliers are included unless active=true)
 export async function getSuppliers(params) {
   const { data } = await api.get('/suppliers', { params });
   return data;

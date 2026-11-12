@@ -7,5 +7,6 @@ export default function publicUser(user) {
     role: user.role,
     isActive: user.isActive,
     settings: user.settings,
+    createdAt: user.createdAt,
   };
 }

@@ -41,6 +41,7 @@ const ACTIONS = {
 const movementTone = { IN: "green", OUT: "red", ADJUST: "blue" };
 
 function statusOf(p) {
+  if (p.stockStatus) return p.stockStatus;
   if (p.quantity === 0) return "out";
   if (p.quantity <= p.reorderLevel) return "low";
   return "ok";
@@ -60,6 +61,7 @@ export default function Inventory() {
   const [products, setProducts] = useState([]);
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [tab, setTab] = useState("stock"); // 'stock' | 'history'
@@ -80,8 +82,14 @@ export default function Inventory() {
         if (!active) return;
         setProducts(stock);
         setMovements(history);
+        setLoadError("");
       })
-      .catch(() => toast.error("Could not load inventory"))
+      .catch((err) => {
+        if (!active) return;
+        const message = err.message || "Could not load inventory";
+        setLoadError(message);
+        toast.error(message);
+      })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -145,37 +153,24 @@ export default function Inventory() {
     }
 
     const { product, type } = dialog;
-    const performedBy = user.email; // backend phase: the server uses the logged-in user's id
     setSaving(true);
     try {
       if (type === "IN")
-        await stockIn({
-          productId: product.id,
-          quantity: value,
-          reason,
-          performedBy,
-        });
+        await stockIn({ productId: product.id, quantity: value, reason });
       if (type === "OUT")
-        await stockOut({
-          productId: product.id,
-          quantity: value,
-          reason,
-          performedBy,
-        });
+        await stockOut({ productId: product.id, quantity: value, reason });
       if (type === "ADJUST")
-        await adjustStock({
-          productId: product.id,
-          newQty: value,
-          reason,
-          performedBy,
-        });
+        await adjustStock({ productId: product.id, newQty: value, reason });
       toast.success(`${ACTIONS[type].title} saved for ${product.name}`);
       setSaving(false);
       setDialog(null);
       setRefreshKey((k) => k + 1);
     } catch (err) {
+      const message = err.message || "Something went wrong";
       setSaving(false);
-      setError(err.message || "Something went wrong");
+      setError(message);
+      toast.error(message);
+      setRefreshKey((k) => k + 1); // stock may have changed elsewhere
     }
   };
 
@@ -233,7 +228,8 @@ export default function Inventory() {
     {
       key: "productName",
       label: "Product",
-      render: (r) => `${r.productName} (${r.sku})`,
+      render: (r) =>
+        r.productName ? `${r.productName} (${r.sku})` : "Unknown product",
     },
     {
       key: "type",
@@ -247,7 +243,7 @@ export default function Inventory() {
       render: (r) => `${r.previousQty} → ${r.newQty}`,
     },
     { key: "reason", label: "Reason", render: (r) => r.reason || "-" },
-    { key: "performedBy", label: "By" },
+    { key: "performedBy", label: "By", render: (r) => r.performedBy || "-" },
   ];
 
   const action = dialog ? ACTIONS[dialog.type] : null;
@@ -325,7 +321,7 @@ export default function Inventory() {
             columns={stockColumns}
             rows={rows}
             loading={loading}
-            emptyText="No products match your search"
+            emptyText={loadError || "No products match your search"}
           />
         </>
       ) : (
@@ -333,7 +329,10 @@ export default function Inventory() {
           columns={historyColumns}
           rows={movements}
           loading={loading}
-          emptyText="No stock movements yet. Use Stock In, Stock Out or Adjust on the Stock levels tab."
+          emptyText={
+            loadError ||
+            "No stock movements yet. Use Stock In, Stock Out or Adjust on the Stock levels tab."
+          }
         />
       )}
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Eye, Plus, Send, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import PageHeader from "../components/PageHeader";
@@ -6,11 +6,10 @@ import DataTable from "../components/DataTable";
 import Badge from "../components/Badge";
 import Modal from "../components/Modal";
 import FormField, { inputClass } from "../components/FormField";
-import { useAuth } from "../context/AuthContext";
 import { getProducts } from "../services/productService";
+import { getSuppliers } from "../services/supplierService";
 import {
   getOrders,
-  getSuppliers,
   createOrder,
   updateOrderStatus,
   receiveOrder,
@@ -34,12 +33,11 @@ const emptyForm = () => ({
 });
 
 export default function PurchaseOrders() {
-  const { user } = useAuth();
-
   const [orders, setOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -49,17 +47,23 @@ export default function PurchaseOrders() {
   const [saving, setSaving] = useState(false);
   const [viewing, setViewing] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const inFlight = useRef(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getOrders(), getSuppliers(), getProducts()])
+    Promise.all([getOrders(), getSuppliers({ active: "true" }), getProducts()])
       .then(([o, s, p]) => {
         if (!active) return;
         setOrders(o);
         setSuppliers(s);
         setProducts(p);
+        setLoadError("");
       })
-      .catch(() => toast.error("Could not load purchase orders"))
+      .catch((err) => {
+        if (!active) return;
+        setLoadError(err.message || "Could not load purchase orders");
+        toast.error(err.message || "Could not load purchase orders");
+      })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -140,13 +144,10 @@ export default function PurchaseOrders() {
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
+    if (saving) return;
     setSaving(true);
     try {
-      const order = await createOrder({
-        ...form,
-        status,
-        createdBy: user.email,
-      });
+      const order = await createOrder({ ...form, status });
       toast.success(
         `${order.orderNumber} ${status === "ordered" ? "placed" : "saved as draft"}`,
       );
@@ -161,6 +162,8 @@ export default function PurchaseOrders() {
 
   // ---------- row actions ----------
   const runAction = async (order, fn, successText) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusyId(order.id);
     try {
       await fn();
@@ -169,7 +172,10 @@ export default function PurchaseOrders() {
       refresh();
     } catch (err) {
       toast.error(err.message || "Something went wrong");
+      setViewing(null);
+      refresh();
     } finally {
+      inFlight.current = false;
       setBusyId(null);
     }
   };
@@ -199,7 +205,7 @@ export default function PurchaseOrders() {
       return;
     runAction(
       o,
-      () => receiveOrder(o.id, user.email),
+      () => receiveOrder(o.id),
       `${o.orderNumber} received, stock updated`,
     );
   };
@@ -217,7 +223,7 @@ export default function PurchaseOrders() {
       {o.status === "draft" && (
         <button
           onClick={() => handlePlace(o)}
-          disabled={busyId === o.id}
+          disabled={busyId !== null}
           title="Place order"
           aria-label={`Place ${o.orderNumber}`}
           className="rounded-lg p-1.5 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40"
@@ -228,7 +234,7 @@ export default function PurchaseOrders() {
       {o.status === "ordered" && (
         <button
           onClick={() => handleReceive(o)}
-          disabled={busyId === o.id}
+          disabled={busyId !== null}
           title="Mark received"
           aria-label={`Mark ${o.orderNumber} received`}
           className="rounded-lg p-1.5 text-green-700 hover:bg-green-50 disabled:opacity-40"
@@ -239,7 +245,7 @@ export default function PurchaseOrders() {
       {(o.status === "draft" || o.status === "ordered") && (
         <button
           onClick={() => handleCancel(o)}
-          disabled={busyId === o.id}
+          disabled={busyId !== null}
           title="Cancel order"
           aria-label={`Cancel ${o.orderNumber}`}
           className="rounded-lg p-1.5 text-red-700 hover:bg-red-50 disabled:opacity-40"
@@ -252,7 +258,11 @@ export default function PurchaseOrders() {
 
   const columns = [
     { key: "orderNumber", label: "Order #" },
-    { key: "supplierName", label: "Supplier" },
+    {
+      key: "supplierName",
+      label: "Supplier",
+      render: (r) => r.supplierName || "-",
+    },
     { key: "items", label: "Items", render: (r) => r.items.length },
     {
       key: "totalAmount",
@@ -306,7 +316,7 @@ export default function PurchaseOrders() {
         columns={columns}
         rows={rows}
         loading={loading}
-        emptyText="No purchase orders found"
+        emptyText={loadError || "No purchase orders found"}
       />
 
       {/* Create order */}
@@ -456,7 +466,9 @@ export default function PurchaseOrders() {
         {viewing && (
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">{viewing.supplierName}</span>
+              <span className="text-gray-600">
+                {viewing.supplierName || "-"}
+              </span>
               <Badge tone={statusTone[viewing.status]}>{viewing.status}</Badge>
             </div>
             <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
@@ -466,9 +478,11 @@ export default function PurchaseOrders() {
                   className="flex items-center justify-between px-3 py-2"
                 >
                   <div>
-                    <p className="font-medium text-gray-900">{i.productName}</p>
+                    <p className="font-medium text-gray-900">
+                      {i.productName || "Deleted product"}
+                    </p>
                     <p className="text-xs text-gray-500">
-                      {i.sku} · {i.quantity} × {formatCurrency(i.unitCost)}
+                      {i.sku || "-"} · {i.quantity} × {formatCurrency(i.unitCost)}
                     </p>
                   </div>
                   <span className="font-medium">
