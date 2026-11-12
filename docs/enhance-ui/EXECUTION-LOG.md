@@ -34,3 +34,8 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 **Files:** `pages/Login.jsx` (split-panel ledger cover + kit form).
 **Checks:** eslint exit 0; browser: wrong password shows server-exact "Invalid email or password" in role=alert; show/hide toggle present; DEV demo hint with CopyButtons present; real admin login succeeds. Screenshot captured (single-column at test viewport; brand panel shows ≥1024px).
 **NOT-RUN:** prod-bundle demo-hint absence grep (DEV gate preserved verbatim; verified in P9 build grep).
+
+## P3 — Inventory
+**Files:** `pages/Inventory.jsx` (kit rebuild), `services/stockService.js` (getMovements filters).
+**Checks:** eslint exit 0; browser: Stock In on Desk Lamp 5→10 with live "5 → 10" preview, toast "Stock added — Desk Lamp", quantity cell ticks and refreshes; URL-synced tabs/filters; movement ledger with reference links. Screenshot captured.
+**NOT-RUN:** none.
