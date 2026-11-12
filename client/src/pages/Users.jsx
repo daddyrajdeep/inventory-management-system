@@ -334,7 +334,7 @@ export default function Users() {
 
       {!loading && !loadError && (
         <p className="mb-4 text-sm text-ink-soft">
-          <span className="num font-medium text-ink">{users.length}</span> users · <span className="num font-medium text-ink">{counts.active}</span> active · <span className="num font-medium text-ink">{counts.admins}</span> admins · <span className="num font-medium text-ink">{counts.managers}</span> managers
+          <span className="num font-medium text-ink">{users.length}</span> {users.length === 1 ? 'user' : 'users'} · <span className="num font-medium text-ink">{counts.active}</span> active · <span className="num font-medium text-ink">{counts.admins}</span> {counts.admins === 1 ? 'admin' : 'admins'} · <span className="num font-medium text-ink">{counts.managers}</span> {counts.managers === 1 ? 'manager' : 'managers'}
         </p>
       )}
 

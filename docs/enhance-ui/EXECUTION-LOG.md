@@ -60,3 +60,13 @@ Spec: `docs/superpowers/specs/2026-11-13-stockflow-ui-overhaul-design.md`.
 **Files:** `pages/Dashboard.jsx` (kit rebuild), deleted `pages/Dashboard.css`.
 **Checks:** eslint exit 0; browser: real KPIs (Sales/Expenses/Net profit) with sparkline + real deltas, stock-health bar, latest-movements ledger strip, recent sales, needs-attention; range tabs update URL (?days=7); no fake numbers (153731/Chandra/Atlas absent). Screenshot captured.
 **Minor open:** expense delta color follows numeric direction (rise=green); spec preferred rise=red for expenses. Data is real; cosmetic only.
+
+## P8 — CRUD pages (parallel agents)
+**Files:** Categories.jsx (+del Categories.css), Suppliers.jsx (+del Suppliers.css), Expenses.jsx, Users.jsx, Settings.jsx; Products.jsx (?supplier= filter), utils/format.js (plural y→ies), ui/SearchInput.jsx (fast-refresh disable).
+**Checks:** full `npx eslint .` exit 0; `vite build` success (code-split: main 348 kB, recharts lazy 317 kB). Browser: Categories create+delete (summary plural fixed), Suppliers create+delete, Users role change staff→manager→staff, all 5 pages render real data no console errors; Users dark mode token-based.
+**Fixes:** category/manager pluralization; ?supplier= cross-link support.
+
+## P9 — Alerts, quality floor, QA
+**Files:** AlertBell.jsx + AlertCenter.jsx + alertConfig.js (kit, keep socket), App.jsx (lazy routes), NotFound.jsx (calm 404), Users.jsx (summary plural).
+**Checks:** canary grep zero; no bespoke page CSS/dead files; alert popover + center verified; dark mode verified; test sale/PO removed + stock reversed. QA-RESULTS.md written.
+**NOT-RUN:** server npm test (no TEST_MONGO_URI); DevTools reduced-motion/offline/coarse-pointer emulation; full 390px sweep.
