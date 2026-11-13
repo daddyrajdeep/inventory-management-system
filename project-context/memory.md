@@ -1,35 +1,31 @@
 # Memory — rolling handoff
 
-Updated: 2026-11-12
+Updated: 2026-11-13
 
 ## State
-- Audit reports (Telo3/XENO, 2026-11-12) fully worked through: all P0, most P1, part of P2, plus report 08 docs.
-- All 10 pages call the real API; no fabricated numbers remain (grep canaries clean).
-- Real-time alerts via Socket.IO (`server/src/socket.js`): JWT + isActive + tokenVersion handshake, emits only after transaction commit; alerts auto-resolve on restock.
-- Password change bumps `User.tokenVersion` and returns a fresh token; old tokens 401.
-- Settings sync: `PUT /auth/settings`; PreferencesProvider sits inside AuthProvider (main.jsx).
-- Passwords: 8+ chars, letter + number (server `utils/passwordRule.js`, client `utils/password.js`). Existing shorter passwords still log in.
-- Seed writes opening-stock + per-sale movements and deducts stock; refuses production without `--force`. Syntax-checked, NOT executed (DB already has products).
-- CSV exports use `utils/csv.js` (formula neutralization).
-- Docs current: `docs/API.md` (all routes + socket events), README, `project-context/tasks.md`.
+- Audit reports fully remediated on `main` (pushed earlier: 6351f26..2306916).
+- UI overhaul "The Counting House" complete on branch `redesign-v3` (NOT pushed). Monochrome ink on warm paper, color only for stock/order status, IBM Plex Sans + Mono self-hosted. No purple/gradients/glass/AI-default fonts.
+- Design system: tokens in `client/src/index.css` (@theme inline, runtime-verified .dark flip); kit in `client/src/components/ui/`; `/ui-kit` DEV route; `project-context/design.md` is the source of truth.
+- All 12 pages rebuilt on the kit: Login, Dashboard, Products, Categories, Suppliers, Inventory, PurchaseOrders, Sales, Expenses, Users, Settings, NotFound. Bespoke page CSS deleted.
+- App shell: grouped sidebar + collapse rail, ⌘K command palette (real product search), UserMenu, breadcrumb, offline banner, skip link, focus-to-main, React 19 ViewTransition.
+- Signatures: RECEIVED stamp on POs, quantity tick (Inventory + dashboard movements). Alert center drawer + kit bell keep the real-time socket.
+- Route-level code splitting: main bundle 348 kB (was 952); recharts lazy.
 
 ## Verification done
-- Client: eslint clean, vite build passes; browser-tested every page as admin and staff.
-- Live write tests (all cleaned up afterwards): PO create/place/double-receive, stock in/out/adjust, category/supplier/user CRUD, 409 guards, alert raise/auto-resolve, settings round-trip across re-login, token invalidation.
-- Server `npm test` NOT run: no `TEST_MONGO_URI` in server/.env (needs Atlas DB with "test" in the name).
+- `npx eslint .` exit 0; `npx vite build` success; canary grep zero.
+- Browser (admin, seeded Atlas): stock in/out tick; PO create→place→receive + stamp + real-time alert; Categories/Suppliers create+delete; Users role change; Sales multi-line cart + invoice drawer; Products 409→deactivate; dashboard real KPIs + range tabs; ⌘K palette; alert center; dark mode on kit + Users.
+- Test sale INV-2026-0126 and PO-2026-0005 removed, stock reversed. Manual +5 Desk Lamp stock-in drift remains (re-seed to reset).
+- Full report: `docs/enhance-ui/QA-RESULTS.md`; per-phase log: `docs/enhance-ui/EXECUTION-LOG.md`.
 
 ## Decisions
-- Staff dashboard: no /reports calls; inventory + recent sales only, with a note. Reports stay admin/manager.
-- Users page: no delete (server has none) — activate/deactivate instead; role-only edit.
-- Socket transport: emit-after-commit (not change streams).
-- `enhance ui/` report folder is OFF LIMITS until the user says otherwise; UI consolidation (UI-01) deliberately deferred to that phase.
+- Direction chosen by user: monochrome ink + status-only color (no brand accent). Anti-AI-slop mandate.
+- Commit identity: Rajdeepkun <mithumondal6647@gmail.com> (per-commit, not local config). Push only when the user asks.
+- Kept shipped behavior: socket alerts, settings sync, 8+char password rule, token invalidation.
 
 ## Blockers / gaps
-- Server test suite unrun (see above). Add tests for /users, /auth/*, settings.
-- UI design consolidation (4 visual styles) pending the enhance-ui phase.
-- Vestigial `Product.rating`/`image`; no barcode input; no audit-log page; Inter font not loaded; reduced-motion missing in Sales/Suppliers CSS.
-- Nothing committed yet (large working tree; 9 dead-file deletions staged).
-- PO counter advanced to 0005 by tests (0003/0004 deleted).
+- Server `npm test` unrun (no TEST_MONGO_URI).
+- Expense delta color cosmetic (rise=green); coarse-pointer/reduced-motion/offline DevTools emulation NOT-RUN; full 390px sweep NOT-RUN.
+- `redesign-v3` not pushed; `main` unchanged by the overhaul.
 
 ## Next step
-Awaiting the user's instructions for the `enhance ui` folder (reports at `C:\Users\reshm\Downloads\report\reports_extracted\reports\enhance ui\`).
+Awaiting user review of `redesign-v3`. Push/merge only on instruction. Possible follow-ups: run server tests, 390px + reduced-motion audit, expense delta color.

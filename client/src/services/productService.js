@@ -1,8 +1,8 @@
 import api from './api';
 
 // GET /api/products?search=&category=&supplier=&status=&includeInactive=true
-export async function getProducts(params) {
-  const { data } = await api.get('/products', { params });
+export async function getProducts(params, config) {
+  const { data } = await api.get('/products', { params, ...config });
   return data;
 }
 

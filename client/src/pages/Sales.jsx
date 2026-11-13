@@ -1,683 +1,333 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ShoppingCart,
-  FileText,
-  Users,
-  TrendingUp,
-  Download,
-  Plus,
-  Search,
-  Eye,
-  Banknote,
-  Smartphone,
-  CreditCard,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  List,
-  LayoutGrid,
-  Loader2,
-  Package,
-} from "lucide-react";
-import toast from "react-hot-toast";
-import "./Sales.css";
-import { useAuth } from "../context/AuthContext";
-import { getSales, getSaleById, createSale } from "../services/saleService";
-import { getProducts } from "../services/productService";
-import { getTopProducts, getSalesByDay } from "../services/reportService";
-import { downloadCsv } from "../utils/csv";
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Banknote, CreditCard, Download, Package, Plus, ShoppingCart, Smartphone, Trash2 } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import toast from 'react-hot-toast';
+import PageHeader from '../components/ui/PageHeader';
+import DataTable from '../components/ui/DataTable';
+import Badge from '../components/ui/Badge';
+import Card from '../components/ui/Card';
+import StatCard from '../components/ui/StatCard';
+import Drawer from '../components/ui/Drawer';
+import Button from '../components/ui/Button';
+import IconButton from '../components/ui/IconButton';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
+import SearchInput, { useDebounced } from '../components/ui/SearchInput';
+import Pagination from '../components/ui/Pagination';
+import EmptyState from '../components/ui/EmptyState';
+import CopyButton from '../components/ui/CopyButton';
+import NumberStepper from '../components/ui/NumberStepper';
+import { useAuth } from '../context/AuthContext';
+import { getSales, getSaleById, createSale } from '../services/saleService';
+import { getProducts } from '../services/productService';
+import { getTopProducts, getSalesByDay } from '../services/reportService';
+import { downloadCsv } from '../utils/csv';
+import { formatINR, formatDateTime, formatDayMonth } from '../utils/format';
 
-const money = (value) =>
-  "₹ " + Number(value || 0).toLocaleString("en-IN");
-
-const units = (n) => `${n} ${n === 1 ? "unit" : "units"}`;
-
-const PAYMENT_METHODS = {
-  cash: { label: "Cash", Icon: Banknote },
-  upi: { label: "UPI", Icon: Smartphone },
-  card: { label: "Card", Icon: CreditCard },
-};
-
-function PaymentBadge({ method }) {
-  const { label, Icon } = PAYMENT_METHODS[method] || { label: method, Icon: Banknote };
-
-  return (
-    <span className={`sales-status ${method}`}>
-      <Icon size={13} />
-      {label}
-    </span>
-  );
-}
+const PAYMENTS = { cash: { label: 'Cash', Icon: Banknote }, upi: { label: 'UPI', Icon: Smartphone }, card: { label: 'Card', Icon: CreditCard } };
+const PAGE_SIZE = 10;
 
 export default function Sales() {
   const { user } = useAuth();
-  const canViewReports = user?.role === "admin" || user?.role === "manager";
+  const canViewReports = user?.role === 'admin' || user?.role === 'manager';
+  const [params, setParams] = useSearchParams();
+
+  const search = params.get('search') || '';
+  const payment = params.get('payment') || '';
+  const from = params.get('from') || '';
+  const to = params.get('to') || '';
+  const debouncedSearch = useDebounced(search, 200);
 
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
-  const [salesTrend, setSalesTrend] = useState([]);
+  const [trend, setTrend] = useState([]);
   const [reportsError, setReportsError] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  const [search, setSearch] = useState("");
-  const [paymentFilter, setPaymentFilter] = useState("All Payments");
-  const [view, setView] = useState("list");
+  const [loadError, setLoadError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
   const [page, setPage] = useState(1);
-  const [modal, setModal] = useState("");
-  const [selectedSale, setSelectedSale] = useState(null);
-  const [saleDetail, setSaleDetail] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
 
-  const [form, setForm] = useState({
-    customerName: "",
-    productId: "",
-    quantity: 1,
-    discount: 0,
-    paymentMethod: "cash",
-  });
+  const [detail, setDetail] = useState(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cart, setCart] = useState([]);
+  const [picker, setPicker] = useState('');
+  const [customer, setCustomer] = useState('');
+  const [payMethod, setPayMethod] = useState('cash');
+  const [discount, setDiscount] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [cartError, setCartError] = useState('');
 
-  const pageSize = 10;
-
-  const loadReports = useCallback(() => {
-    Promise.all([
-      getTopProducts({ limit: 4, sortBy: "quantity", days: 30 }),
-      getSalesByDay({ days: 6 }),
-    ])
-      .then(([top, trend]) => {
-        setTopProducts(top || []);
-        setSalesTrend(trend || []);
-        setReportsError(false);
-      })
-      .catch(() => setReportsError(true));
-  }, []);
+  const setParam = (key, val) => {
+    const next = new URLSearchParams(params);
+    if (val) next.set(key, val); else next.delete(key);
+    setParams(next, { replace: true });
+    setPage(1);
+  };
 
   useEffect(() => {
-    const loadAllData = async () => {
-      try {
-        const [salesData, prodData] = await Promise.all([getSales(), getProducts()]);
-        setSales(salesData || []);
-        setProducts(prodData || []);
-      } catch (err) {
-        toast.error(err.message || "Failed to load sales data");
-      } finally {
-        setLoading(false);
-      }
-    };
+    let active = true;
+    const q = {};
+    if (debouncedSearch) q.search = debouncedSearch;
+    if (payment) q.paymentMethod = payment;
+    if (from) q.from = from;
+    if (to) q.to = to;
+    getSales(q)
+      .then((list) => { if (active) { setSales(list); setLoadError(''); } })
+      .catch((err) => active && setLoadError(err.message))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [debouncedSearch, payment, from, to, refreshKey]);
 
-    loadAllData();
-    if (canViewReports) loadReports();
-  }, [canViewReports, loadReports]);
+  useEffect(() => { getProducts().then(setProducts).catch(() => {}); }, [refreshKey]);
 
-  const filteredSales = useMemo(() => {
-    const term = search.toLowerCase();
-    return sales.filter((sale) => {
-      const matchesSearch =
-        sale.invoiceNumber.toLowerCase().includes(term) ||
-        sale.customerName.toLowerCase().includes(term);
+  useEffect(() => {
+    if (!canViewReports) return undefined;
+    let active = true;
+    Promise.all([getTopProducts({ limit: 4, sortBy: 'revenue', days: 7 }), getSalesByDay({ days: 7 })])
+      .then(([top, t]) => { if (active) { setTopProducts(top || []); setTrend(t || []); setReportsError(false); } })
+      .catch(() => active && setReportsError(true));
+    return () => { active = false; };
+  }, [canViewReports, refreshKey]);
 
-      const matchesPayment =
-        paymentFilter === "All Payments" || sale.paymentMethod === paymentFilter;
+  // Invoice detail deep link
+  const saleParam = params.get('sale');
+  useEffect(() => {
+    if (!saleParam) return undefined;
+    let active = true;
+    getSaleById(saleParam).then((s) => active && setDetail(s)).catch((err) => toast.error(err.message));
+    return () => { active = false; };
+  }, [saleParam]);
 
-      return matchesSearch && matchesPayment;
+  // ?new=1 opens the cart
+  const newParam = params.get('new');
+  const [consumed, setConsumed] = useState(null);
+  if (newParam && newParam !== consumed) {
+    setConsumed(newParam);
+    setCart([]); setCustomer(''); setPayMethod('cash'); setDiscount(''); setCartError(''); setPicker('');
+    setCartOpen(true);
+  }
+
+  const refresh = () => setRefreshKey((k) => k + 1);
+  const activeProducts = products.filter((p) => p.isActive !== false);
+  const pickerResults = activeProducts.filter((p) => { const q = picker.trim().toLowerCase(); return !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q); }).slice(0, 8);
+
+  const addToCart = (p) => {
+    setCart((c) => {
+      const existing = c.find((i) => i.product === p.id);
+      if (existing) return c.map((i) => i.product === p.id ? { ...i, quantity: Math.min(i.quantity + 1, p.quantity) } : i);
+      return [...c, { product: p.id, name: p.name, sku: p.sku, price: p.price, stock: p.quantity, quantity: 1 }];
     });
-  }, [sales, search, paymentFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleSales = filteredSales.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  const totalSalesAmount = sales.reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
-
-  const uniqueCustomers = new Set(
-    sales.map((s) => s.customerName).filter((name) => name && !/^walk-in/i.test(name))
-  ).size;
-
-  const maxTrendSales = Math.max(0, ...salesTrend.map((d) => d.sales || 0));
-  const maxUnitsSold = Math.max(0, ...topProducts.map((p) => p.unitsSold || 0));
-
-  const openSaleDetail = async (sale) => {
-    setSelectedSale(sale);
-    setSaleDetail(null);
-    setModal("view");
-    try {
-      setDetailLoading(true);
-      setSaleDetail(await getSaleById(sale.id));
-    } catch (err) {
-      toast.error(err.message || "Failed to load sale details");
-    } finally {
-      setDetailLoading(false);
-    }
+    setCartError('');
   };
+  const setQty = (id, q) => setCart((c) => c.map((i) => i.product === id ? { ...i, quantity: q } : i));
+  const removeItem = (id) => setCart((c) => c.filter((i) => i.product !== id));
 
-  const openNewSale = () => {
-    setSelectedSale(null);
-    setForm({
-      customerName: "",
-      productId: products.find((p) => p.quantity > 0)?.id || "",
-      quantity: 1,
-      discount: 0,
-      paymentMethod: "cash",
-    });
-    setModal("add");
-  };
+  const gross = cart.reduce((s, i) => s + i.price * (Number(i.quantity) || 0), 0);
+  const disc = Number(discount) || 0;
+  const net = Math.max(gross - disc, 0);
 
-  const selectedProduct = products.find((p) => p.id === form.productId);
-  const calculatedGross = selectedProduct ? selectedProduct.price * form.quantity : 0;
-  const calculatedTotal = Math.max(0, calculatedGross - (Number(form.discount) || 0));
-
-  const handleSaveSale = async (e) => {
-    e.preventDefault();
-    if (!form.productId) {
-      toast.error("Please select a product");
-      return;
-    }
-    if (form.quantity < 1) {
-      toast.error("Quantity must be at least 1");
-      return;
-    }
-
+  const submitSale = async () => {
+    if (!cart.length) return setCartError('Add products to start a sale.');
+    if (disc > gross) return setCartError('Discount cannot exceed the gross total.');
+    setSubmitting(true);
+    setCartError('');
     try {
-      setSubmitting(true);
-      const newSale = await createSale({
-        items: [{ product: form.productId, quantity: Number(form.quantity) }],
-        customerName: form.customerName.trim(),
-        paymentMethod: form.paymentMethod,
-        discount: Number(form.discount) || 0,
+      const sale = await createSale({
+        items: cart.map((i) => ({ product: i.product, quantity: Number(i.quantity) })),
+        discount: disc || undefined,
+        customerName: customer.trim() || undefined,
+        paymentMethod: payMethod,
       });
-
-      setSales((prev) => [newSale, ...prev]);
-      toast.success(`Sale created: ${newSale.invoiceNumber}`);
-      setModal("");
-      setPage(1);
-
-      // Refresh product stock and reports
-      const updatedProducts = await getProducts();
-      setProducts(updatedProducts || []);
-      if (canViewReports) loadReports();
-    } catch (err) {
-      toast.error(err.message || "Failed to create sale");
-    } finally {
+      toast.success(`Sale recorded — ${sale.invoiceNumber}`);
       setSubmitting(false);
+      setCartOpen(false);
+      setParam('new', '');
+      refresh();
+    } catch (err) {
+      setSubmitting(false);
+      setCartError(err.message);
+      refresh();
     }
   };
 
-  const exportCSV = () => {
-    const headers = ["Invoice", "Customer", "Units", "Amount", "Payment", "Date"];
-    const rows = filteredSales.map((s) => [
-      s.invoiceNumber,
-      s.customerName,
-      s.itemCount,
-      s.totalAmount,
-      PAYMENT_METHODS[s.paymentMethod]?.label || s.paymentMethod,
-      new Date(s.createdAt).toLocaleDateString(),
-    ]);
-
-    downloadCsv("stockflow-sales.csv", [headers, ...rows]);
+  const exportCsv = () => {
+    const rows = [['Invoice', 'Customer', 'Units', 'Amount', 'Payment', 'Date', 'Sold by'],
+      ...paged.map((s) => [s.invoiceNumber, s.customerName, s.itemCount, s.totalAmount, PAYMENTS[s.paymentMethod]?.label || s.paymentMethod, formatDateTime(s.createdAt), s.soldBy || ''])];
+    downloadCsv(`stockflow-sales-${new Date().toISOString().slice(0, 10)}.csv`, rows);
   };
 
-  const stats = [
-    {
-      title: "Total Sales",
-      value: money(totalSalesAmount),
-      note: "Revenue across listed sales",
-      Icon: ShoppingCart,
-      color: "purple",
-    },
-    {
-      title: "Total Orders",
-      value: sales.length,
-      note: "Invoices recorded",
-      Icon: FileText,
-      color: "blue",
-    },
-    {
-      title: "Total Customers",
-      value: uniqueCustomers,
-      note: "Named customers, excl. walk-in",
-      Icon: Users,
-      color: "green",
-    },
-    {
-      title: "Average Order",
-      value: money(sales.length ? Math.round(totalSalesAmount / sales.length) : 0),
-      note: "Total sales ÷ orders",
-      Icon: TrendingUp,
-      color: "amber",
-    },
+  const totalPages = Math.max(1, Math.ceil(sales.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = sales.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const kpis = useMemo(() => ({
+    revenue: sales.reduce((s, x) => s + x.totalAmount, 0),
+    invoices: sales.length,
+    units: sales.reduce((s, x) => s + x.itemCount, 0),
+  }), [sales]);
+
+  const maxTop = Math.max(...topProducts.map((t) => t.revenue || 0), 1);
+
+  const columns = [
+    { key: 'invoiceNumber', label: 'Invoice', render: (s) => <span className="inline-flex items-center gap-1"><span className="mono">{s.invoiceNumber}</span><CopyButton value={s.invoiceNumber} /></span> },
+    { key: 'customerName', label: 'Customer', render: (s) => s.customerName },
+    { key: 'itemCount', label: 'Units', align: 'right', num: true, render: (s) => s.itemCount },
+    { key: 'totalAmount', label: 'Amount', align: 'right', num: true, render: (s) => formatINR(s.totalAmount) },
+    { key: 'paymentMethod', label: 'Payment', render: (s) => <Badge tone="neutral">{PAYMENTS[s.paymentMethod]?.label || s.paymentMethod}</Badge> },
+    { key: 'createdAt', label: 'Date', render: (s) => <span className="text-ink-soft">{formatDateTime(s.createdAt)}</span> },
+    { key: 'soldBy', label: 'Sold by', render: (s) => s.soldBy || '—' },
   ];
 
-  const detail = saleDetail && saleDetail.id === selectedSale?.id ? saleDetail : null;
-  const emptyMessage = sales.length === 0 ? "No sales yet" : "No sales match your filters.";
-
   return (
-    <div className="sales-page">
-      <div className="sales-breadcrumb">
-        Dashboard <span>›</span> Sales
+    <>
+      <PageHeader title="Sales" subtitle="Invoices and stock deductions." action={<div className="flex gap-2"><Button variant="secondary" onClick={exportCsv} disabled={!sales.length} title="Exports the invoices currently loaded (max 200)"><Download size={16} /> Export CSV</Button><Button onClick={() => { setCart([]); setCustomer(''); setPayMethod('cash'); setDiscount(''); setCartError(''); setCartOpen(true); }}><Plus size={16} /> New sale</Button></div>} />
+
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard label="Total revenue" value={formatINR(kpis.revenue)} footnote="Latest 200 invoices" />
+        <StatCard label="Invoices" value={kpis.invoices} />
+        <StatCard label="Units sold" value={kpis.units} />
       </div>
 
-      {/* Page heading */}
-      <div className="sales-heading">
-        <div className="sales-heading-title">
-          <div className="sales-heading-icon">
-            <ShoppingCart size={25} />
-          </div>
-          <div>
-            <h1>Sales</h1>
-            <p>Manage sales transactions, invoices and stock deductions.</p>
-          </div>
-        </div>
-
-        <div className="sales-heading-actions">
-          <button className="sales-outline-btn" onClick={exportCSV}>
-            <Download size={16} /> Export
-          </button>
-          <button className="sales-primary-btn" onClick={openNewSale}>
-            <Plus size={18} /> New Sale
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="sales-metrics">
-        {stats.map(({ title, value, note, Icon, color }) => (
-          <div className={`sales-metric ${color}`} key={title}>
-            <div className="sales-metric-icon">
-              <Icon size={23} />
-            </div>
-            <div>
-              <span>{title}</span>
-              <strong>{value}</strong>
-              <small>{note}</small>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Analytics */}
-      <div className="sales-analytics">
-        <section className="sales-chart-card">
-          <div className="sales-card-heading">
-            <div>
-              <h3>Recent Sales Velocity</h3>
-              <p>Daily sales, last 6 days</p>
-            </div>
-          </div>
-
-          {!canViewReports ? (
-            <p className="sales-empty">Reports are available to managers and admins.</p>
-          ) : reportsError ? (
-            <p className="sales-empty">Couldn't load sales trend.</p>
-          ) : maxTrendSales === 0 ? (
-            <p className="sales-empty">No sales yet</p>
-          ) : (
-            <div className="sales-chart">
-              <div className="sales-chart-plot" style={{ marginLeft: 0 }}>
-                <div className="sales-bars">
-                  {salesTrend.map((item) => (
-                    <div className="sales-bar-column" key={item.date}>
-                      <div
-                        className={`sales-bar${item.sales > 0 ? "" : " zero"}`}
-                        style={{ height: `${((item.sales || 0) / maxTrendSales) * 100}%` }}
-                        title={`${item.date}: ${money(item.sales)}`}
-                      />
-                      <span>{item.date.slice(5)}</span>
+      {canViewReports && (
+        <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card>
+            <h3 className="mb-3 text-sm font-semibold text-ink">Sales, last 7 days</h3>
+            {reportsError ? <p className="text-sm text-out">Couldn’t load reports. <button className="underline" onClick={refresh}>Retry</button></p> : trend.every((d) => !d.sales) ? <EmptyState title="No sales in the last 7 days." /> : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={trend} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="var(--line)" />
+                  <XAxis dataKey="date" tickFormatter={formatDayMonth} tick={{ fontSize: 11, fill: 'var(--ink-soft)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--ink-soft)' }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v >= 1000 ? `${v / 1000}k` : v}`} />
+                  <Tooltip cursor={{ fill: 'var(--paper)' }} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 12 }} formatter={(v) => formatINR(v)} labelFormatter={formatDayMonth} />
+                  <Bar dataKey="sales" fill="var(--ink)" radius={[3, 3, 0, 0]} fillOpacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+          <Card>
+            <h3 className="mb-3 text-sm font-semibold text-ink">Top products, last 7 days</h3>
+            {reportsError ? <p className="text-sm text-out">Couldn’t load reports.</p> : topProducts.length === 0 ? <EmptyState title="No sales in the last 7 days." /> : (
+              <div className="space-y-3">
+                {topProducts.map((t, i) => (
+                  <div key={t.product || i}>
+                    <div className="flex items-center justify-between text-[13px]">
+                      <span className="flex items-center gap-2"><span className="num text-ink-soft">{i + 1}</span><span className="font-medium text-ink">{t.name}</span><span className="mono text-xs text-ink-soft">{t.sku}</span></span>
+                      <span className="num text-ink">{formatINR(t.revenue)}</span>
                     </div>
-                  ))}
-                </div>
+                    <div className="mt-1 h-1.5 rounded-full bg-paper"><div className="h-full rounded-full bg-ink" style={{ width: `${(t.revenue / maxTop) * 100}%` }} /></div>
+                  </div>
+                ))}
               </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap gap-3">
+        <SearchInput value={search} onChange={(v) => setParam('search', v)} placeholder="Search invoice or customer…" className="min-w-50 flex-1" />
+        <Select value={payment} onChange={(e) => setParam('payment', e.target.value)} aria-label="Payment method" className="w-40">
+          <option value="">All payments</option><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option>
+        </Select>
+        <Input type="date" value={from} onChange={(e) => setParam('from', e.target.value)} aria-label="From date" className="w-40" />
+        <Input type="date" value={to} onChange={(e) => setParam('to', e.target.value)} aria-label="To date" className="w-40" />
+      </div>
+
+      <DataTable columns={columns} rows={paged} loading={loading} onRowClick={(s) => setParam('sale', s.id)}
+        empty={loadError ? <EmptyState title={loadError} action={<Button size="sm" variant="secondary" onClick={refresh}>Retry</Button>} /> : <EmptyState icon={ShoppingCart} title={search || payment || from || to ? 'No sales match these filters.' : 'No sales yet.'} action={!search && !payment && !from && !to ? <Button size="sm" onClick={() => setCartOpen(true)}>Record your first sale</Button> : undefined} />} />
+      {sales.length > PAGE_SIZE && <Pagination page={currentPage} pageSize={PAGE_SIZE} total={sales.length} onPage={setPage} />}
+      {sales.length >= 200 && <p className="mt-2 text-center text-xs text-ink-soft">Older invoices: narrow the date range.</p>}
+
+      {/* Invoice drawer */}
+      <Drawer open={!!saleParam} title={detail?.invoiceNumber || 'Invoice'} onClose={() => setParam('sale', '')}>
+        {detail && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-2"><Badge tone="neutral">{PAYMENTS[detail.paymentMethod]?.label || detail.paymentMethod}</Badge><CopyButton value={detail.invoiceNumber} /></div>
+            <dl className="grid grid-cols-2 gap-3 text-[13px]">
+              <div><dt className="text-xs text-ink-soft">Customer</dt><dd className="text-ink">{detail.customerName}</dd></div>
+              <div><dt className="text-xs text-ink-soft">Sold by</dt><dd className="text-ink">{detail.soldBy || '—'}</dd></div>
+              <div><dt className="text-xs text-ink-soft">Date</dt><dd className="text-ink">{formatDateTime(detail.createdAt)}</dd></div>
+            </dl>
+            <div className="overflow-hidden rounded-md border border-line">
+              <table className="min-w-full text-[13px]">
+                <thead><tr className="border-b border-line text-xs text-ink-soft"><th className="px-3 py-2 text-left font-semibold">Product</th><th className="px-3 py-2 text-right font-semibold">Qty</th><th className="px-3 py-2 text-right font-semibold">Price</th><th className="px-3 py-2 text-right font-semibold">Subtotal</th></tr></thead>
+                <tbody>
+                  {detail.items.map((i) => (
+                    <tr key={i.product} className="border-b border-line last:border-0">
+                      <td className="px-3 py-2 font-medium text-ink">{i.name}</td>
+                      <td className="num px-3 py-2 text-right">{i.quantity}</td>
+                      <td className="num px-3 py-2 text-right">{formatINR(i.unitPrice)}</td>
+                      <td className="num px-3 py-2 text-right">{formatINR(i.subtotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between text-ink-soft"><span>Gross</span><span className="num">{formatINR(detail.items.reduce((s, i) => s + i.subtotal, 0))}</span></div>
+              {detail.discount > 0 && <div className="flex justify-between text-ink-soft"><span>Discount</span><span className="num">−{formatINR(detail.discount)}</span></div>}
+              <div className="flex justify-between border-t border-line pt-2 text-base font-semibold text-ink"><span>Total</span><span className="num">{formatINR(detail.totalAmount)}</span></div>
+            </div>
+          </div>
+        )}
+      </Drawer>
+
+      {/* New sale — POS cart */}
+      <Drawer
+        open={cartOpen}
+        title="New sale"
+        width="min(560px, 100vw)"
+        onClose={() => !submitting && (setCartOpen(false), setParam('new', ''))}
+        footer={
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm text-ink-soft"><span>Gross</span><span className="num">{formatINR(gross)}</span></div>
+            {disc > 0 && <div className="flex justify-between text-sm text-ink-soft"><span>Discount</span><span className="num">−{formatINR(disc)}</span></div>}
+            <div className="flex justify-between text-base font-semibold text-ink" aria-live="polite"><span>Total</span><span className="num">{formatINR(net)}</span></div>
+            {cartError && <p className="text-[13px] text-out" role="alert">{cartError}</p>}
+            <Button className="w-full" loading={submitting} onClick={submitSale}>Record sale</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <SearchInput value={picker} onChange={setPicker} placeholder="Search products to add…" />
+          {picker.trim() && (
+            <div className="overflow-hidden rounded-md border border-line">
+              {pickerResults.length === 0 ? <p className="px-3 py-3 text-sm text-ink-soft">No products match.</p> : pickerResults.map((p) => (
+                <button key={p.id} type="button" disabled={p.quantity <= 0} onClick={() => addToCart(p)} className="flex w-full items-center gap-2 border-b border-line px-3 py-2 text-left text-sm last:border-0 hover:bg-paper disabled:opacity-50">
+                  <span className="flex-1"><span className="font-medium text-ink">{p.name}</span> <span className="mono text-xs text-ink-soft">{p.sku}</span></span>
+                  <span className="num text-ink-soft">{formatINR(p.price)}</span>
+                  <span className={`text-xs ${p.quantity <= 0 ? 'text-out' : p.quantity <= p.reorderLevel ? 'text-low' : 'text-ink-soft'}`}>{p.quantity <= 0 ? 'Out of stock' : `${p.quantity} in stock`}</span>
+                </button>
+              ))}
             </div>
           )}
-        </section>
 
-        <section className="sales-top-card">
-          <div className="sales-card-heading">
-            <div>
-              <h3>Top Selling Products</h3>
-              <p>By units sold, last 30 days</p>
-            </div>
-          </div>
-
-          {!canViewReports ? (
-            <p className="sales-empty">Reports are available to managers and admins.</p>
-          ) : reportsError ? (
-            <p className="sales-empty">Couldn't load top products.</p>
-          ) : topProducts.length === 0 ? (
-            <p className="sales-empty">No sales yet</p>
-          ) : (
-            <div className="sales-product-list">
-              {topProducts.map((prod) => (
-                <div className="sales-product" key={prod.productId}>
-                  <div className="sales-product-symbol">
-                    <Package size={20} />
+          {cart.length === 0 ? <EmptyState icon={Package} title="Add products to start a sale." /> : (
+            <div className="space-y-2">
+              {cart.map((i) => (
+                <div key={i.product} className="rounded-sm border border-line p-2.5">
+                  <div className="flex items-center justify-between"><span className="font-medium text-ink">{i.name}</span><IconButton label={`Remove ${i.name}`} className="text-out" onClick={() => removeItem(i.product)}><Trash2 size={15} /></IconButton></div>
+                  <p className="mono text-xs text-ink-soft">{i.sku} · {formatINR(i.price)} each</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <NumberStepper value={i.quantity} onChange={(q) => setQty(i.product, q)} min={1} max={i.stock} ariaLabel={`Quantity for ${i.name}`} />
+                    <span className="text-xs text-ink-soft">Available: {i.stock}</span>
+                    <span className="num ml-auto font-medium text-ink">{formatINR(i.price * (Number(i.quantity) || 0))}</span>
                   </div>
-                  <div className="sales-product-info">
-                    <strong>{prod.name}</strong>
-                    <div className="sales-product-track">
-                      <i style={{ width: `${maxUnitsSold ? (prod.unitsSold / maxUnitsSold) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-                  <span>{units(prod.unitsSold)}</span>
                 </div>
               ))}
             </div>
           )}
-        </section>
-      </div>
 
-      {/* Sales transactions */}
-      <section className="sales-panel">
-        <div className="sales-table-heading">
-          <div>
-            <h3>Sales Transactions</h3>
-            <p>Invoices recorded, newest first.</p>
-          </div>
-          <button className="sales-primary-btn" onClick={openNewSale}>
-            <Plus size={17} /> New Sale
-          </button>
-        </div>
-
-        <div className="sales-toolbar">
-          <label className="sales-search">
-            <Search size={18} />
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search invoice or customer..."
-            />
-          </label>
-
-          <select
-            value={paymentFilter}
-            onChange={(e) => {
-              setPaymentFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option>All Payments</option>
-            <option value="cash">Cash</option>
-            <option value="upi">UPI</option>
-            <option value="card">Card</option>
-          </select>
-
-          <div className="sales-view-toggle">
-            <button
-              className={view === "list" ? "selected" : ""}
-              onClick={() => setView("list")}
-              title="List view"
-            >
-              <List size={18} />
-            </button>
-            <button
-              className={view === "grid" ? "selected" : ""}
-              onClick={() => setView("grid")}
-              title="Grid view"
-            >
-              <LayoutGrid size={18} />
-            </button>
-          </div>
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "var(--s-muted)" }}>
-            <Loader2 className="animate-spin" size={24} style={{ display: "inline-block", marginRight: "8px" }} />
-            Loading sales...
-          </div>
-        ) : view === "list" ? (
-          <div className="sales-table-wrap">
-            <table className="sales-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Invoice #</th>
-                  <th>Customer</th>
-                  <th>Units</th>
-                  <th>Amount</th>
-                  <th>Payment</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleSales.map((sale, index) => (
-                  <tr key={sale.id}>
-                    <td>{(currentPage - 1) * pageSize + index + 1}</td>
-                    <td><span className="sales-invoice">{sale.invoiceNumber}</span></td>
-                    <td><strong>{sale.customerName}</strong></td>
-                    <td>{units(sale.itemCount)}</td>
-                    <td><strong>{money(sale.totalAmount)}</strong></td>
-                    <td><PaymentBadge method={sale.paymentMethod} /></td>
-                    <td>
-                      {new Date(sale.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "2-digit",
-                        year: "numeric",
-                      })}
-                    </td>
-                    <td>
-                      <div className="sales-row-actions">
-                        <button title="View Details" onClick={() => openSaleDetail(sale)}>
-                          <Eye size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-
-                {visibleSales.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="sales-empty">
-                      {emptyMessage}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="sales-grid">
-            {visibleSales.map((sale) => (
-              <article className="sales-transaction-card" key={sale.id}>
-                <div className="sales-transaction-top">
-                  <span className="sales-invoice">{sale.invoiceNumber}</span>
-                  <PaymentBadge method={sale.paymentMethod} />
-                </div>
-                <h4>{sale.customerName}</h4>
-                <p>
-                  {new Date(sale.createdAt).toLocaleDateString()} · {units(sale.itemCount)}
-                </p>
-                <strong className="sales-transaction-amount">
-                  {money(sale.totalAmount)}
-                </strong>
-                <div className="sales-row-actions">
-                  <button onClick={() => openSaleDetail(sale)}>
-                    <Eye size={16} /> View
-                  </button>
-                </div>
-              </article>
+          <Input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Walk-in customer" aria-label="Customer name" />
+          <div role="radiogroup" aria-label="Payment method" className="flex gap-2">
+            {Object.entries(PAYMENTS).map(([key, { label, Icon }]) => (
+              <button key={key} type="button" role="radio" aria-checked={payMethod === key} onClick={() => setPayMethod(key)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border px-3 py-2 text-sm font-medium transition-colors ${payMethod === key ? 'border-ink bg-ink text-on-ink' : 'border-line text-ink-soft hover:border-ink-soft'}`}><Icon size={15} /> {label}</button>
             ))}
-            {visibleSales.length === 0 && (
-              <p className="sales-empty">{emptyMessage}</p>
-            )}
           </div>
-        )}
-
-        <div className="sales-footer">
-          <span>
-            Showing {filteredSales.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
-            {" – "}
-            {Math.min(currentPage * pageSize, filteredSales.length)}
-            {" of "}{filteredSales.length} transactions
-          </span>
-
-          <div className="sales-pagination">
-            <button
-              disabled={currentPage <= 1}
-              onClick={() => setPage(Math.max(1, currentPage - 1))}
-            >
-              <ChevronLeft size={17} />
-            </button>
-            <span>{currentPage}</span>
-            <small>of {totalPages}</small>
-            <button
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
-            >
-              <ChevronRight size={17} />
-            </button>
-          </div>
+          <Input type="number" min="0" step="0.01" value={discount} onChange={(e) => { setDiscount(e.target.value); setCartError(''); }} placeholder="Discount (₹)" aria-label="Discount" />
         </div>
-      </section>
-
-      {/* Add / View modal */}
-      {modal && (
-        <div className="sales-modal-backdrop" onClick={() => setModal("")}>
-          <div className="sales-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="sales-modal-close" onClick={() => setModal("")}>
-              <X size={17} />
-            </button>
-
-            {modal === "view" ? (
-              <>
-                <h2>Sale Details</h2>
-                <p>{units(selectedSale.itemCount)} across {selectedSale.lineCount} {selectedSale.lineCount === 1 ? "product" : "products"}.</p>
-                <div className="sales-detail-list">
-                  <span>Invoice</span><strong>{selectedSale.invoiceNumber}</strong>
-                  <span>Customer</span><strong>{selectedSale.customerName}</strong>
-                  <span>Discount</span><strong>{money(selectedSale.discount)}</strong>
-                  <span>Amount</span><strong>{money(selectedSale.totalAmount)}</strong>
-                  <span>Payment Method</span><strong>{PAYMENT_METHODS[selectedSale.paymentMethod]?.label || selectedSale.paymentMethod}</strong>
-                  <span>Sold By</span><strong>{selectedSale.soldBy || "—"}</strong>
-                  <span>Date</span>
-                  <strong>{new Date(selectedSale.createdAt).toLocaleString()}</strong>
-                </div>
-
-                <div className="sales-items-wrap">
-                  {detailLoading ? (
-                    <p className="sales-empty">
-                      <Loader2 className="animate-spin" size={16} style={{ display: "inline-block", marginRight: "6px" }} />
-                      Loading items...
-                    </p>
-                  ) : detail ? (
-                    <table className="sales-items-table">
-                      <thead>
-                        <tr>
-                          <th>Product</th>
-                          <th>Qty</th>
-                          <th>Unit Price</th>
-                          <th>Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.items.map((item, idx) => (
-                          <tr key={`${item.product}-${idx}`}>
-                            <td>{item.name}</td>
-                            <td>{item.quantity}</td>
-                            <td>{money(item.unitPrice)}</td>
-                            <td>{money(item.subtotal)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <p className="sales-empty">Couldn't load line items.</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <h2>Create New Sale</h2>
-                <p>Creates an invoice and atomically decrements product inventory.</p>
-                <form onSubmit={handleSaveSale}>
-                  <label>
-                    Customer Name
-                    <input
-                      value={form.customerName}
-                      onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-                      placeholder="e.g. Aman Traders (or leave blank for Walk-in)"
-                    />
-                  </label>
-
-                  <label>
-                    Select Product
-                    <select
-                      value={form.productId}
-                      onChange={(e) => setForm({ ...form, productId: e.target.value })}
-                      required
-                    >
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id} disabled={p.quantity <= 0}>
-                          {p.name} — ₹{p.price} ({p.quantity > 0 ? `${p.quantity} in stock` : 'Out of stock'})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    Quantity
-                    <input
-                      required
-                      type="number"
-                      min="1"
-                      max={selectedProduct?.quantity || 9999}
-                      value={form.quantity}
-                      onChange={(e) => setForm({ ...form, quantity: Math.max(1, Number(e.target.value)) })}
-                    />
-                  </label>
-
-                  <label>
-                    Discount (₹)
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.discount}
-                      onChange={(e) => setForm({ ...form, discount: Math.max(0, Number(e.target.value)) })}
-                    />
-                  </label>
-
-                  <label>
-                    Payment Method
-                    <select
-                      value={form.paymentMethod}
-                      onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
-                    >
-                      <option value="cash">Cash</option>
-                      <option value="upi">UPI</option>
-                      <option value="card">Card</option>
-                    </select>
-                  </label>
-
-                  <div style={{ margin: "16px 0", padding: "12px", background: "var(--s-soft)", borderRadius: "8px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <span>Gross Amount:</span>
-                      <strong>{money(calculatedGross)}</strong>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <span>Discount:</span>
-                      <strong>- {money(form.discount)}</strong>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: "16px", borderTop: "1px solid var(--s-border)", paddingTop: "8px" }}>
-                      <span>Net Total:</span>
-                      <strong style={{ color: "#7c3aed" }}>{money(calculatedTotal)}</strong>
-                    </div>
-                  </div>
-
-                  <button type="submit" className="sales-primary-btn" disabled={submitting} style={{ width: "100%" }}>
-                    {submitting ? "Processing Sale..." : "Confirm & Save Sale"}
-                  </button>
-                </form>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      </Drawer>
+    </>
   );
 }

@@ -10,9 +10,12 @@ export async function getStock() {
   return data;
 }
 
-// GET /api/stock/movements?product=<id>  (newest first)
-export async function getMovements(productId) {
-  const params = productId ? { product: productId } : undefined;
+// GET /api/stock/movements?product=&type=&limit=  (newest first)
+export async function getMovements({ product, type, limit } = {}) {
+  const params = {};
+  if (product) params.product = product;
+  if (type) params.type = type;
+  if (limit) params.limit = limit;
   const { data } = await api.get("/stock/movements", { params });
   return data;
 }
