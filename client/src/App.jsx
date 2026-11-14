@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './layouts/MainLayout';
 
 const Login = lazy(() => import('./pages/Login'));
+const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Products = lazy(() => import('./pages/Products'));
 const Categories = lazy(() => import('./pages/Categories'));
@@ -42,6 +43,7 @@ export default function App() {
       />
       <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink-soft">Loading…</div>}>
         <Routes>
+          <Route path="/welcome" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           {import.meta.env.DEV && <Route path="/ui-kit" element={<UIKit />} />}
 
