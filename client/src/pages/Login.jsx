@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { AlertCircle, Boxes, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { loginRequest } from '../services/authService';
@@ -87,6 +87,7 @@ export default function Login() {
             <span className="text-base font-semibold text-ink">{APP_NAME}</span>
           </div>
 
+          <Link to="/welcome" className="mb-6 inline-block text-xs text-ink-soft underline-offset-2 hover:text-ink hover:underline">← Back to home</Link>
           <h1 className="text-[28px] font-semibold leading-[34px] text-ink">Sign in</h1>
           <p className="mt-1 text-sm text-ink-soft">Use your work account.</p>
 
