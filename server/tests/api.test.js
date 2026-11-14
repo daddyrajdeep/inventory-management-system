@@ -330,3 +330,60 @@ test('unknown route gives a clean 404 json', async () => {
   assert.equal(r.status, 404);
   assert.ok(r.body.message);
 });
+
+test('users: admin manages users, self-guards hold, non-admin refused, weak password rejected', async () => {
+  assert.equal((await call('GET', '/users', as('staff'))).status, 403, 'staff cannot list users');
+  assert.equal((await call('POST', '/users', as('manager'), { name: 'X', email: 'x@t.com', password: 'secret12' })).status, 403);
+
+  const created = await call('POST', '/users', as('admin'), { name: 'Test Staff', email: 'teststaff@t.com', password: 'secret12', role: 'staff' });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.role, 'staff');
+  assert.ok(!('password' in created.body), 'never returns the password');
+  const uid = created.body.id;
+
+  assert.ok((await call('GET', '/users', as('admin'))).body.some((u) => u.id === uid));
+  assert.equal((await call('PATCH', `/users/${uid}/role`, as('admin'), { role: 'manager' })).body.role, 'manager');
+  assert.equal((await call('PATCH', `/users/${uid}/active`, as('admin'), { isActive: false })).body.isActive, false);
+
+  const me = (await call('GET', '/auth/me', as('admin'))).body.user;
+  assert.equal((await call('PATCH', `/users/${me.id}/role`, as('admin'), { role: 'staff' })).status, 400, 'cannot change own role');
+  assert.equal((await call('PATCH', `/users/${me.id}/active`, as('admin'), { isActive: false })).status, 400, 'cannot deactivate self');
+
+  assert.equal((await call('POST', '/users', as('admin'), { name: 'Weak', email: 'weak@t.com', password: 'short1' })).status, 400, 'weak password rejected');
+});
+
+test('auth: profile update, settings sync, password change invalidates the old token', async () => {
+  await call('POST', '/users', as('admin'), { name: 'Auth Test', email: 'authtest@t.com', password: 'secret12', role: 'staff' });
+  const oldToken = (await call('POST', '/auth/login', null, { email: 'authtest@t.com', password: 'secret12' })).body.token;
+
+  const profile = await call('PUT', '/auth/profile', oldToken, { name: 'Auth Test Renamed', email: 'authtest@t.com' });
+  assert.equal(profile.status, 200);
+  assert.equal(profile.body.user.name, 'Auth Test Renamed');
+
+  const settings = await call('PUT', '/auth/settings', oldToken, { darkMode: true, language: 'hi' });
+  assert.equal(settings.status, 200);
+  assert.equal(settings.body.settings.darkMode, true);
+  assert.equal((await call('PUT', '/auth/settings', oldToken, { language: 'xx' })).status, 400, 'unsupported language rejected');
+
+  const changed = await call('PUT', '/auth/password', oldToken, { currentPassword: 'secret12', newPassword: 'newsecret12' });
+  assert.equal(changed.status, 200);
+  assert.ok(changed.body.token, 'returns a fresh token');
+  assert.equal((await call('GET', '/auth/me', oldToken)).status, 401, 'old token is invalidated');
+  assert.equal((await call('GET', '/auth/me', changed.body.token)).status, 200, 'new token works');
+  assert.equal((await call('POST', '/auth/login', null, { email: 'authtest@t.com', password: 'newsecret12' })).status, 200, 'login with new password');
+});
+
+test('alerts: restocking above the reorder level auto-resolves the shortage alert', async () => {
+  const p = (await call('POST', '/products', as('manager'), { name: 'Auto Resolve Test', sku: 'AR-TEST-1', price: 10, reorderLevel: 10, category: 'Electronics' })).body;
+  await call('POST', '/stock/in', as('staff'), { product: p.id, quantity: 20, reason: 'opening' });
+  await call('POST', '/stock/out', as('staff'), { product: p.id, quantity: 15, reason: 'sell' }); // 20 -> 5 crosses reorder
+
+  const unread = (await call('GET', '/alerts?unread=true&limit=100', as('admin'))).body;
+  const alert = unread.find((a) => a.product?.id === p.id);
+  assert.ok(alert, 'a low-stock alert was raised');
+  assert.equal(alert.isRead, false);
+
+  await call('POST', '/stock/in', as('staff'), { product: p.id, quantity: 20, reason: 'restock' }); // 5 -> 25 above reorder
+  const all = (await call('GET', '/alerts?limit=100', as('admin'))).body;
+  assert.equal(all.find((a) => a.product?.id === p.id).isRead, true, 'restock auto-resolved the alert');
+});
